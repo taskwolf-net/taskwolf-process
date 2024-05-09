@@ -5,9 +5,11 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import net.taskwolf.core.access.TaskwolfRequestBody;
 import net.taskwolf.core.access.TaskwolfRestController;
+import net.taskwolf.core.iterator.AsyncIterator;
 import net.taskwolf.core.user.User;
 import net.taskwolf.core.user.UserDatabaseTable;
 import net.taskwolf.core.user.UserTargetDatabaseTable;
+import net.taskwolf.core.workflow.WorkflowDatabaseTable;
 import net.taskwolf.process.structure.Process;
 import net.taskwolf.process.structure.ProcessDatabaseTable;
 import net.taskwolf.process.structure.connection.ProcessConnectionDatabaseTable;
@@ -29,19 +31,22 @@ public final class ProcessModificationController extends TaskwolfRestController 
   private final ProcessStepDatabaseTable processStepDatabaseTable;
   private final ProcessConnectionDatabaseTable processConnectionDatabaseTable;
   private final UserTargetDatabaseTable userTargetDatabaseTable;
+  private final WorkflowDatabaseTable workflowDatabaseTable;
 
   private ProcessModificationController(
     Key secretKey, UserDatabaseTable userDatabaseTable,
     ProcessDatabaseTable processDatabaseTable,
     ProcessStepDatabaseTable processStepDatabaseTable,
     ProcessConnectionDatabaseTable processConnectionDatabaseTable,
-    UserTargetDatabaseTable userTargetDatabaseTable
+    UserTargetDatabaseTable userTargetDatabaseTable,
+    WorkflowDatabaseTable workflowDatabaseTable
   ) {
     super(secretKey, userDatabaseTable);
     this.processDatabaseTable = processDatabaseTable;
     this.processStepDatabaseTable = processStepDatabaseTable;
     this.processConnectionDatabaseTable = processConnectionDatabaseTable;
     this.userTargetDatabaseTable = userTargetDatabaseTable;
+    this.workflowDatabaseTable = workflowDatabaseTable;
   }
 
   @RequestMapping(path = "/process/add/", method = RequestMethod.POST)
@@ -55,13 +60,12 @@ public final class ProcessModificationController extends TaskwolfRestController 
     var description = body.getString("description");
     var steps = body.getObjectList("steps");
     var connections = body.getObjectList("connections");
-    if (!checkProcessIntegrity(name, description, steps, connections)) {
-      return;
-    }
     findUser(request).thenAccept(user ->
-      userTargetDatabaseTable.findTargetSecured(user.id()).thenAccept(target ->
-        createProcess(user, target, steps, connections, created, name,
-          description)));
+      checkProcessIntegrity(user, name, description, steps, connections)
+        .thenApply(success -> success ?
+          userTargetDatabaseTable.findTargetSecured(user.id()).thenAccept(target ->
+            createProcess(user, target, steps, connections, created,
+              name, description)) : null));
   }
 
   @RequestMapping(path = "/process/update/", method = RequestMethod.POST)
@@ -75,21 +79,30 @@ public final class ProcessModificationController extends TaskwolfRestController 
     var description = body.getString("description");
     var steps = body.getObjectList("steps");
     var connections = body.getObjectList("connections");
-    if (!checkProcessIntegrity(name, description, steps, connections)) {
-      return;
-    }
-    findUser(request).thenAccept(user -> processDatabaseTable.findProcess(processId)
-      .thenAccept(process -> updateProcess(user, process, steps, connections,
-        name, description)));
+    findUser(request).thenAccept(user ->
+      checkProcessIntegrity(user, name, description, steps, connections)
+        .thenApply(success -> success ? processDatabaseTable.findProcess(processId)
+          .thenAccept(process -> updateProcess(user, process, steps, connections,
+            name, description)) : null));
   }
 
-  private boolean checkProcessIntegrity(
-    String name, String description, List<TaskwolfRequestBody> stepData,
+  private CompletableFuture<Boolean> checkProcessIntegrity(
+    User user, String name, String description, List<TaskwolfRequestBody> stepData,
     List<TaskwolfRequestBody> connectionData
   ) {
     if (name.equals("") || description.equals("")) {
-      return false;
+      return CompletableFuture.completedFuture(false);
     }
+    if (!checkProcessCompleteness(stepData, connectionData)) {
+      return CompletableFuture.completedFuture(false);
+    }
+    return AsyncIterator.execute(stepData, entry -> checkStepWorkflows(user, entry))
+      .thenApply(results -> results.stream().allMatch(result -> result));
+  }
+
+  private boolean checkProcessCompleteness(
+    List<TaskwolfRequestBody> stepData, List<TaskwolfRequestBody> connectionData
+  ) {
     var steps = findStartSteps(stepData);
     while (!steps.isEmpty()) {
       var newSteps = Lists.<TaskwolfRequestBody>newArrayList();
@@ -132,6 +145,21 @@ public final class ProcessModificationController extends TaskwolfRestController 
       }
     }
     return connections;
+  }
+
+  private CompletableFuture<Boolean> checkStepWorkflows(
+    User user, TaskwolfRequestBody step
+  ) {
+    var workflows = step.getObjectList("workflows").stream()
+      .map(workflow -> workflow.getUUID("id")).toList();
+    return AsyncIterator.execute(workflows, workflowDatabaseTable::findWorkflow)
+      .thenApply(entries -> entries.stream().allMatch(workflow ->
+        checkWorkflowAuthorization(user, workflow.ownerId())));
+  }
+
+  protected boolean checkWorkflowAuthorization(User user, UUID workflowOwnerId) {
+    return workflowOwnerId.equals(user.id()) ||
+      user.organizations().contains(workflowOwnerId);
   }
 
   private void updateProcess(
@@ -224,9 +252,11 @@ public final class ProcessModificationController extends TaskwolfRestController 
   private void createStep(
     UUID stepId, UUID processId, TaskwolfRequestBody stepData
   ) {
+    var workflows = stepData.getObjectList("workflows").stream()
+      .map(workflow -> workflow.getUUID("id")).toList();
     processStepDatabaseTable.insertProcessStep(stepId, processId,
       stepData.getString("name"), stepData.getString("description"),
-      stepData.getString("type"), stepData.getInt("xCoordinate"),
+      workflows, stepData.getString("type"), stepData.getInt("xCoordinate"),
       stepData.getInt("yCoordinate"));
   }
 

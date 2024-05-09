@@ -20,6 +20,7 @@ public final class ProcessStepDatabaseTable extends DatabaseTable {
     columns.add(DatabaseColumn.create("process", DatabaseDataType.UUID));
     columns.add(DatabaseColumn.create("name", DatabaseDataType.TEXT));
     columns.add(DatabaseColumn.create("description", DatabaseDataType.TEXT));
+    columns.add(DatabaseListColumn.create("workflows", DatabaseDataType.UUID));
     columns.add(DatabaseColumn.create("type", DatabaseDataType.TEXT));
     columns.add(DatabaseColumn.create("xCoordinate", DatabaseDataType.INT));
     columns.add(DatabaseColumn.create("yCoordinate", DatabaseDataType.INT));
@@ -35,16 +36,16 @@ public final class ProcessStepDatabaseTable extends DatabaseTable {
 
   public void insertProcessStep(ProcessStep step) {
     insertProcessStep(step.id(), step.processId(), step.name(),
-      step.description(), step.type().toString(), step.xCoordinate(),
-      step.yCoordinate());
+      step.description(), step.workflows(), step.type().toString(),
+      step.xCoordinate(), step.yCoordinate());
   }
 
   public void insertProcessStep(
-    UUID id, UUID processId, String name, String description, String type,
-    int xCoordinate, int yCoordinate
+    UUID id, UUID processId, String name, String description,
+    List<UUID> workflows, String type, int xCoordinate, int yCoordinate
   ) {
-    insert(DatabaseRow.of(id, processId, name, description, type, xCoordinate,
-      yCoordinate));
+    insert(DatabaseRow.of(id, processId, name, description, workflows, type,
+      xCoordinate, yCoordinate));
   }
 
   public void deleteProcessStep(UUID stepId) {
