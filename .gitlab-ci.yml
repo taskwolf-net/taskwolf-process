@@ -1,0 +1,11 @@
+image: openjdk:21
+
+before_script:
+  - GRADLE_USER_HOME="$(pwd)/.gradle"
+  - export GRADLE_USER_HOME
+  - export TASKWOLF_GITLAB_PRIVATE_TOKEN="$TASKWOLF_GITLAB_PRIVATE_TOKEN"
+
+build:
+  stage: build
+  script:
+    - ./gradlew assemble
