@@ -1,9 +1,9 @@
-# Taskwolf - Table
+# Taskwolf - Process
 
-This module implements the table / database function of Taskwolf. Users can store collected data directly with us and later analysis tools will be developed to evaluate them.
+This module implements the Taskwolf process system. It is used to model and optimize processes. It offers a higher instance than the workflows and can be used to link workflows.
 
 ## Status
 
-|             | Build Status                                                                                    |
-|-------------|-------------------------------------------------------------------------------------------------|
-| Master      | ![Java CI with Gradle](https://git.taskwolf.net/root/taskwolf-table/badges/master/pipeline.svg) |
+|             | Build Status                                                                                      |
+|-------------|---------------------------------------------------------------------------------------------------|
+| Master      | ![Java CI with Gradle](https://git.taskwolf.net/root/taskwolf-process/badges/master/pipeline.svg) |
