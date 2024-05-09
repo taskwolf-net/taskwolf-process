@@ -28,7 +28,7 @@ public final class ProcessModule extends Module {
 
   @Override
   public void enable() throws Exception {
-    log = injector().getInstance(Log.class).subLog("Table");
+    log = injector().getInstance(Log.class).subLog("Process");
     springApplication = injector().getInstance(SpringApplication.class);
     contextInitializer = injector().getInstance(ProcessContextInitializer.class);
     springApplication.addInitializers(contextInitializer);
