@@ -254,10 +254,12 @@ public final class ProcessModificationController extends TaskwolfRestController 
   ) {
     var workflows = stepData.getObjectList("workflows").stream()
       .map(workflow -> workflow.getUUID("id")).toList();
+    var todos = stepData.getObjectList("todos").stream()
+      .map(workflow -> workflow.getString("todo")).toList();
     processStepDatabaseTable.insertProcessStep(stepId, processId,
       stepData.getString("name"), stepData.getString("description"),
-      workflows, stepData.getString("type"), stepData.getInt("xCoordinate"),
-      stepData.getInt("yCoordinate"));
+      todos, workflows, stepData.getString("type"),
+      stepData.getInt("xCoordinate"), stepData.getInt("yCoordinate"));
   }
 
   private void createConnection(

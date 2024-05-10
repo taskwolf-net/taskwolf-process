@@ -160,6 +160,8 @@ public final class ProcessInformationController extends TaskwolfRestController {
       stepInformation.put("stepId", step.id());
       stepInformation.put("stepName", step.name());
       stepInformation.put("stepDescription", step.description());
+      stepInformation.put("stepTodos", step.todos());
+      stepInformation.put("stepWorkflows", step.workflows());
       stepInformation.put("stepType", step.type());
       stepInformation.put("stepXCoordinate", step.xCoordinate());
       stepInformation.put("stepYCoordinate", step.yCoordinate());
