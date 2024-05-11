@@ -1,8 +1,10 @@
 package net.taskwolf.process.access;
 
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import net.taskwolf.core.CoreModule;
 import net.taskwolf.core.access.TaskwolfRequestBody;
 import net.taskwolf.core.access.TaskwolfRestController;
 import net.taskwolf.core.iterator.AsyncIterator;
@@ -10,6 +12,7 @@ import net.taskwolf.core.user.User;
 import net.taskwolf.core.user.UserDatabaseTable;
 import net.taskwolf.core.user.UserTargetDatabaseTable;
 import net.taskwolf.core.workflow.WorkflowDatabaseTable;
+import net.taskwolf.core.workflow.WorkflowEntry;
 import net.taskwolf.process.structure.Process;
 import net.taskwolf.process.structure.ProcessDatabaseTable;
 import net.taskwolf.process.structure.connection.ProcessConnectionDatabaseTable;
@@ -32,6 +35,7 @@ public final class ProcessModificationController extends TaskwolfRestController 
   private final ProcessConnectionDatabaseTable processConnectionDatabaseTable;
   private final UserTargetDatabaseTable userTargetDatabaseTable;
   private final WorkflowDatabaseTable workflowDatabaseTable;
+  private final CoreModule coreModule;
 
   private ProcessModificationController(
     Key secretKey, UserDatabaseTable userDatabaseTable,
@@ -39,7 +43,7 @@ public final class ProcessModificationController extends TaskwolfRestController 
     ProcessStepDatabaseTable processStepDatabaseTable,
     ProcessConnectionDatabaseTable processConnectionDatabaseTable,
     UserTargetDatabaseTable userTargetDatabaseTable,
-    WorkflowDatabaseTable workflowDatabaseTable
+    WorkflowDatabaseTable workflowDatabaseTable, CoreModule coreModule
   ) {
     super(secretKey, userDatabaseTable);
     this.processDatabaseTable = processDatabaseTable;
@@ -47,6 +51,7 @@ public final class ProcessModificationController extends TaskwolfRestController 
     this.processConnectionDatabaseTable = processConnectionDatabaseTable;
     this.userTargetDatabaseTable = userTargetDatabaseTable;
     this.workflowDatabaseTable = workflowDatabaseTable;
+    this.coreModule = coreModule;
   }
 
   @RequestMapping(path = "/process/add/", method = RequestMethod.POST)
@@ -157,11 +162,6 @@ public final class ProcessModificationController extends TaskwolfRestController 
       .thenApply(workflow -> checkWorkflowAuthorization(user, workflow.ownerId()));
   }
 
-  protected boolean checkWorkflowAuthorization(User user, UUID workflowOwnerId) {
-    return workflowOwnerId.equals(user.id()) ||
-      user.organizations().contains(workflowOwnerId);
-  }
-
   private void updateProcess(
     User user, Process process, List<TaskwolfRequestBody> stepData,
     List<TaskwolfRequestBody> connectionData, String name,
@@ -269,6 +269,45 @@ public final class ProcessModificationController extends TaskwolfRestController 
     processConnectionDatabaseTable.insertProcessConnection(connectionId,
       processId, stepIds.get(connectionData.getInt("originStep")),
       stepIds.get(connectionData.getInt("destinationStep")));
+  }
+
+  @RequestMapping(path = "/process/workflow/execute/", method = RequestMethod.POST)
+  private void executeProcessStepWorkflow(
+    HttpServletRequest request, @RequestBody String payload,
+    HttpServletResponse response
+  ) {
+    var body = TaskwolfRequestBody.of(payload, response);
+    var workflowId = body.getUUID("workflow");
+    findUser(request).thenAccept(user ->
+      workflowDatabaseTable.workflowExists(workflowId).thenAccept(exists ->
+        executeProcessStepWorkflow(user, workflowId, exists)));
+  }
+
+  private void executeProcessStepWorkflow(
+    User user, UUID workflowId, boolean exists
+  ) {
+    if (!exists) {
+      return;
+    }
+    workflowDatabaseTable.findWorkflow(workflowId).thenAccept(workflow ->
+      executeProcessStepWorkflow(user, workflow));
+  }
+
+  private void executeProcessStepWorkflow(User user, WorkflowEntry workflowEntry) {
+    if (!checkWorkflowAuthorization(user, workflowEntry.ownerId())) {
+      return;
+    }
+    executeProcessStepWorkflow(workflowEntry);
+  }
+
+  private void executeProcessStepWorkflow(WorkflowEntry workflowEntry) {
+    coreModule.createWorkflow(workflowEntry).thenAccept(workflow ->
+      workflow.trigger(Maps.newHashMap()));
+  }
+
+  private boolean checkWorkflowAuthorization(User user, UUID workflowOwnerId) {
+    return workflowOwnerId.equals(user.id()) ||
+      user.organizations().contains(workflowOwnerId);
   }
 
   @RequestMapping(path = "/process/remove/", method = RequestMethod.POST)
