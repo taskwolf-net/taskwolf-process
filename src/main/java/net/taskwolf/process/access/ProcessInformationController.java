@@ -11,6 +11,8 @@ import net.taskwolf.core.iterator.AsyncListIterator;
 import net.taskwolf.core.user.User;
 import net.taskwolf.core.user.UserDatabaseTable;
 import net.taskwolf.core.user.UserTargetDatabaseTable;
+import net.taskwolf.core.workflow.WorkflowDatabaseTable;
+import net.taskwolf.core.workflow.WorkflowEntry;
 import net.taskwolf.process.structure.Process;
 import net.taskwolf.process.structure.ProcessDatabaseTable;
 import net.taskwolf.process.structure.connection.ProcessConnection;
@@ -35,6 +37,7 @@ public final class ProcessInformationController extends TaskwolfRestController {
   private final ProcessDatabaseTable processDatabaseTable;
   private final ProcessStepDatabaseTable processStepDatabaseTable;
   private final ProcessConnectionDatabaseTable processConnectionDatabaseTable;
+  private final WorkflowDatabaseTable workflowDatabaseTable;
   private final UserTargetDatabaseTable userTargetDatabaseTable;
   private final SimpleDateFormat simpleDateFormat = new SimpleDateFormat("dd.MM.yyyy");
 
@@ -43,13 +46,34 @@ public final class ProcessInformationController extends TaskwolfRestController {
     ProcessDatabaseTable processDatabaseTable,
     ProcessStepDatabaseTable processStepDatabaseTable,
     ProcessConnectionDatabaseTable processConnectionDatabaseTable,
+    WorkflowDatabaseTable workflowDatabaseTable,
     UserTargetDatabaseTable userTargetDatabaseTable
   ) {
     super(secretKey, userDatabaseTable);
     this.processDatabaseTable = processDatabaseTable;
     this.processStepDatabaseTable = processStepDatabaseTable;
     this.processConnectionDatabaseTable = processConnectionDatabaseTable;
+    this.workflowDatabaseTable = workflowDatabaseTable;
     this.userTargetDatabaseTable = userTargetDatabaseTable;
+  }
+
+  @RequestMapping(path = "/process/workflows/", method = RequestMethod.GET)
+  public CompletableFuture<Map<String, Object>> findProcessWorkflows(
+    HttpServletRequest request
+  ) {
+    var futureResponse = new CompletableFuture<Map<String, Object>>();
+    userTargetDatabaseTable.findTargetSecured(findUserId(request))
+      .thenAccept(target -> findProcessWorkflows(target)
+        .thenAccept(futureResponse::complete));
+    return futureResponse;
+  }
+
+  private CompletableFuture<Map<String, Object>> findProcessWorkflows(
+    UUID target
+  ) {
+    return workflowDatabaseTable.findWorkflowByOwnerAndModule(target, "process")
+      .thenApply(workflows -> Map.of("workflows", workflows.stream().map(
+        workflow -> Map.of("id", workflow.id(), "name", workflow.name())).toList()));
   }
 
   @RequestMapping(path = "/process/find/", method = RequestMethod.POST)
@@ -127,16 +151,35 @@ public final class ProcessInformationController extends TaskwolfRestController {
     Process process
   ) {
     var futureResponse = new CompletableFuture<Map<String, Object>>();
-    userDatabaseTable().findUserIfExists(process.creatorId())
-      .thenAccept(creator -> processStepDatabaseTable.findProcessStepsByProcess(process.id())
-        .thenAccept(steps -> processConnectionDatabaseTable.findProcessConnectionsByProcess(process.id())
-          .thenAccept(connections -> futureResponse.complete(
-            assemblyProcessInformation(process, creator, steps, connections)))));
+    userDatabaseTable().findUserIfExists(process.creatorId()).thenAccept(creator ->
+      processStepDatabaseTable.findProcessStepsByProcess(process.id())
+        .thenAccept(steps -> findStepsWorkflow(steps).thenAccept(stepWorkflows ->
+          processConnectionDatabaseTable.findProcessConnectionsByProcess(process.id())
+            .thenAccept(connections -> futureResponse.complete(
+              assemblyProcessInformation(process, creator, stepWorkflows, connections))))));
     return futureResponse;
   }
 
+  private CompletableFuture<Map<ProcessStep, String>> findStepsWorkflow(
+    List<ProcessStep> steps
+  ) {
+    var result = Maps.<ProcessStep, String>newHashMap();
+    return AsyncIterator.execute(steps, step -> findWorkflowName(step)
+        .thenAccept(workflowName -> result.put(step, workflowName)))
+      .thenApply(value -> result);
+  }
+
+  private CompletableFuture<String> findWorkflowName(ProcessStep step) {
+    if (step.workflow() == null) {
+      return CompletableFuture.completedFuture(null);
+    }
+    return workflowDatabaseTable.workflowExists(step.workflow()).thenCompose(
+      exists -> exists ? workflowDatabaseTable.findWorkflow(step.workflow())
+        .thenApply(WorkflowEntry::name) : CompletableFuture.completedFuture(null));
+  }
+
   private Map<String, Object> assemblyProcessInformation(
-    Process process, User creator, List<ProcessStep> steps,
+    Process process, User creator, Map<ProcessStep, String> steps,
     List<ProcessConnection> connections
   ) {
     var information = Maps.<String, Object>newHashMap();
@@ -151,17 +194,21 @@ public final class ProcessInformationController extends TaskwolfRestController {
   }
 
   private Map<String, Object> assemblyProcessStepsInformation(
-    List<ProcessStep> steps
+    Map<ProcessStep, String> steps
   ) {
     var information = Maps.<String, Object>newHashMap();
     var stepsInformation = Lists.<Map<String, Object>>newArrayList();
-    for (var step : steps) {
+    for (var entry : steps.entrySet()) {
+      var step = entry.getKey();
       var stepInformation = Maps.<String, Object>newHashMap();
       stepInformation.put("stepId", step.id());
       stepInformation.put("stepName", step.name());
       stepInformation.put("stepDescription", step.description());
       stepInformation.put("stepTodos", step.todos());
-      stepInformation.put("stepWorkflows", step.workflows());
+      if (entry.getValue() != null) {
+        stepInformation.put("stepWorkflow", Map.of("id", step.workflow(),
+          "name", entry.getValue()));
+      }
       stepInformation.put("stepType", step.type());
       stepInformation.put("stepXCoordinate", step.xCoordinate());
       stepInformation.put("stepYCoordinate", step.yCoordinate());

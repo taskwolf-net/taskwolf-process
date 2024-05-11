@@ -15,7 +15,7 @@ public final class ProcessStep {
   public static ProcessStep of(DatabaseRow row) {
     return create(row.findCell(0).uuidValue(), row.findCell(1).uuidValue(),
       row.findCell(2).stringValue(), row.findCell(3).stringValue(),
-      row.findCell(4).listValue(), row.findCell(5).listValue(),
+      row.findCell(4).listValue(), row.findCell(5).uuidValue(),
       ProcessStepType.valueOf(row.findCell(6).stringValue().toUpperCase()),
       row.findCell(7).integerValue(), row.findCell(8).integerValue());
   }
@@ -25,7 +25,7 @@ public final class ProcessStep {
   private final String name;
   private final String description;
   private final List<String> todos;
-  private final List<UUID> workflows;
+  private final UUID workflow;
   private final ProcessStepType type;
   private final int xCoordinate;
   private final int yCoordinate;

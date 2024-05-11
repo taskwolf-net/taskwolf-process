@@ -96,7 +96,7 @@ public final class ProcessModificationController extends TaskwolfRestController 
     if (!checkProcessCompleteness(stepData, connectionData)) {
       return CompletableFuture.completedFuture(false);
     }
-    return AsyncIterator.execute(stepData, entry -> checkStepWorkflows(user, entry))
+    return AsyncIterator.execute(stepData, entry -> checkStepWorkflow(user, entry))
       .thenApply(results -> results.stream().allMatch(result -> result));
   }
 
@@ -147,14 +147,14 @@ public final class ProcessModificationController extends TaskwolfRestController 
     return connections;
   }
 
-  private CompletableFuture<Boolean> checkStepWorkflows(
+  private CompletableFuture<Boolean> checkStepWorkflow(
     User user, TaskwolfRequestBody step
   ) {
-    var workflows = step.getObjectList("workflows").stream()
-      .map(workflow -> workflow.getUUID("id")).toList();
-    return AsyncIterator.execute(workflows, workflowDatabaseTable::findWorkflow)
-      .thenApply(entries -> entries.stream().allMatch(workflow ->
-        checkWorkflowAuthorization(user, workflow.ownerId())));
+    if (!step.has("workflow")) {
+      return CompletableFuture.completedFuture(true);
+    }
+    return workflowDatabaseTable.findWorkflow(step.getUUID("workflow"))
+      .thenApply(workflow -> checkWorkflowAuthorization(user, workflow.ownerId()));
   }
 
   protected boolean checkWorkflowAuthorization(User user, UUID workflowOwnerId) {
@@ -252,13 +252,13 @@ public final class ProcessModificationController extends TaskwolfRestController 
   private void createStep(
     UUID stepId, UUID processId, TaskwolfRequestBody stepData
   ) {
-    var workflows = stepData.getObjectList("workflows").stream()
-      .map(workflow -> workflow.getUUID("id")).toList();
     var todos = stepData.getObjectList("todos").stream()
       .map(workflow -> workflow.getString("todo")).toList();
+    var workflow = stepData.has("workflow") ? stepData.getUUID("workflow") : null;
+    System.out.println(workflow);
     processStepDatabaseTable.insertProcessStep(stepId, processId,
       stepData.getString("name"), stepData.getString("description"),
-      todos, workflows, stepData.getString("type"),
+      todos, workflow, stepData.getString("type"),
       stepData.getInt("xCoordinate"), stepData.getInt("yCoordinate"));
   }
 
