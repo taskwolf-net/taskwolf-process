@@ -12,6 +12,7 @@ import net.taskwolf.core.module.ModuleDescription;
 import net.taskwolf.core.module.ModuleInformation;
 import net.taskwolf.core.module.ModuleLoadPriority;
 import net.taskwolf.core.trigger.TriggerRepository;
+import net.taskwolf.process.trigger.ProcessTrigger;
 import org.springframework.boot.SpringApplication;
 
 @ModuleDescription(name = "process", version = "1.0.0-SNAPSHOT",
@@ -58,6 +59,8 @@ public final class ProcessModule extends Module {
     var databaseConnection = injector().getInstance(DatabaseConnection.class);
     var databaseKeyspace = injector().getInstance(DatabaseKeyspace.class);
     var repository = TriggerRepository.create();
+    repository.registerTrigger(ProcessTrigger.create(databaseConnection,
+      databaseKeyspace));
     return repository;
   }
 
