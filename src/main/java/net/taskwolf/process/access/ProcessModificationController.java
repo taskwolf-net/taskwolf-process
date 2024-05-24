@@ -255,7 +255,6 @@ public final class ProcessModificationController extends TaskwolfRestController 
     var todos = stepData.getObjectList("todos").stream()
       .map(workflow -> workflow.getString("todo")).toList();
     var workflow = stepData.has("workflow") ? stepData.getUUID("workflow") : null;
-    System.out.println(workflow);
     processStepDatabaseTable.insertProcessStep(stepId, processId,
       stepData.getString("name"), stepData.getString("description"),
       todos, workflow, stepData.getString("type"),
