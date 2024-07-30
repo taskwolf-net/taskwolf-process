@@ -6,8 +6,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import net.taskwolf.core.CoreModule;
 import net.taskwolf.core.access.TaskwolfRequestBody;
-import net.taskwolf.core.access.TaskwolfRestController;
 import net.taskwolf.core.iterator.AsyncIterator;
+import net.taskwolf.core.organization.team.TeamTargetDatabaseTable;
 import net.taskwolf.core.user.User;
 import net.taskwolf.core.user.UserDatabaseTable;
 import net.taskwolf.core.user.UserTargetDatabaseTable;
@@ -29,11 +29,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 
 @RestController
-public final class ProcessModificationController extends TaskwolfRestController {
-  private final ProcessDatabaseTable processDatabaseTable;
-  private final ProcessStepDatabaseTable processStepDatabaseTable;
-  private final ProcessConnectionDatabaseTable processConnectionDatabaseTable;
-  private final UserTargetDatabaseTable userTargetDatabaseTable;
+public final class ProcessModificationController extends ProcessController {
   private final WorkflowDatabaseTable workflowDatabaseTable;
   private final CoreModule coreModule;
 
@@ -43,13 +39,12 @@ public final class ProcessModificationController extends TaskwolfRestController 
     ProcessStepDatabaseTable processStepDatabaseTable,
     ProcessConnectionDatabaseTable processConnectionDatabaseTable,
     UserTargetDatabaseTable userTargetDatabaseTable,
+    TeamTargetDatabaseTable teamTargetDatabaseTable,
     WorkflowDatabaseTable workflowDatabaseTable, CoreModule coreModule
   ) {
-    super(secretKey, userDatabaseTable);
-    this.processDatabaseTable = processDatabaseTable;
-    this.processStepDatabaseTable = processStepDatabaseTable;
-    this.processConnectionDatabaseTable = processConnectionDatabaseTable;
-    this.userTargetDatabaseTable = userTargetDatabaseTable;
+    super(secretKey, userDatabaseTable, processDatabaseTable,
+      processStepDatabaseTable, processConnectionDatabaseTable,
+      userTargetDatabaseTable, teamTargetDatabaseTable);
     this.workflowDatabaseTable = workflowDatabaseTable;
     this.coreModule = coreModule;
   }
@@ -68,9 +63,17 @@ public final class ProcessModificationController extends TaskwolfRestController 
     findUser(request).thenAccept(user ->
       checkProcessIntegrity(user, name, description, steps, connections)
         .thenApply(success -> success ?
-          userTargetDatabaseTable.findTargetSecured(user.id()).thenAccept(target ->
-            createProcess(user, target, steps, connections, created,
-              name, description)) : null));
+          userTargetDatabaseTable().findTargetSecured(user.id()).thenAccept(target ->
+            findTeam(user, target).thenAccept(team ->
+              createProcess(user, target, team, steps, connections, created,
+                name, description))) : null));
+  }
+
+  private CompletableFuture<UUID> findTeam(User user, UUID target) {
+    return user.id().equals(target) ?
+      CompletableFuture.completedFuture(null) :
+      teamTargetDatabaseTable().findTargetSecured(user.id())
+        .thenApply(team -> team.orElse(null));
   }
 
   @RequestMapping(path = "/process/update/", method = RequestMethod.POST)
@@ -86,7 +89,7 @@ public final class ProcessModificationController extends TaskwolfRestController 
     var connections = body.getObjectList("connections");
     findUser(request).thenAccept(user ->
       checkProcessIntegrity(user, name, description, steps, connections)
-        .thenApply(success -> success ? processDatabaseTable.findProcess(processId)
+        .thenApply(success -> success ? processDatabaseTable().findProcess(processId)
           .thenAccept(process -> updateProcess(user, process, steps, connections,
             name, description)) : null));
   }
@@ -170,45 +173,45 @@ public final class ProcessModificationController extends TaskwolfRestController 
     if (!checkProcessAuthorization(user, process)) {
       return;
     }
-    deleteProcess(user, process);
+    deleteProcess(process);
     userDatabaseTable().findUser(process.creatorId()).thenAccept(creator ->
-      processDatabaseTable.generateAvailableProcessId().thenAccept(processId ->
-        createProcess(processId, creator, process.ownerId(), stepData,
-          connectionData, process.created(), name, description)));
+      processDatabaseTable().generateAvailableProcessId().thenAccept(processId ->
+        createProcess(processId, creator, process.ownerId(), process.teamId(),
+          stepData, connectionData, process.created(), name, description)));
   }
 
   private void createProcess(
-    User creator, UUID ownerId, List<TaskwolfRequestBody> stepData,
+    User creator, UUID ownerId, UUID teamId, List<TaskwolfRequestBody> stepData,
     List<TaskwolfRequestBody> connectionData, long created, String name,
     String description
   ) {
     if (!checkProcessAuthorization(creator, ownerId)) {
       return;
     }
-    processDatabaseTable.generateAvailableProcessId().thenAccept(processId ->
-      createProcess(processId, creator, ownerId, stepData, connectionData,
+    processDatabaseTable().generateAvailableProcessId().thenAccept(processId ->
+      createProcess(processId, creator, ownerId, teamId, stepData, connectionData,
         created, name, description));
   }
 
   private void createProcess(
-    UUID processId, User creator, UUID ownerId,
+    UUID processId, User creator, UUID ownerId, UUID teamId,
     List<TaskwolfRequestBody> stepData, List<TaskwolfRequestBody> connectionData,
     long created, String name, String description
   ) {
     generateStepIds(stepData.size()).thenAccept(stepIds ->
       generateConnectionIds(connectionData.size()).thenAccept(connectionIds ->
-        createProcess(processId, creator.id(), ownerId, stepIds, stepData,
+        createProcess(processId, creator.id(), ownerId, teamId, stepIds, stepData,
           connectionIds, connectionData, created, name, description)));
   }
 
   private CompletableFuture<List<UUID>> generateStepIds(int number) {
     return generateMultipleIds(number,
-      processStepDatabaseTable::generateAvailableProcessStepId);
+      processStepDatabaseTable()::generateAvailableProcessStepId);
   }
 
   private CompletableFuture<List<UUID>> generateConnectionIds(int number) {
     return generateMultipleIds(number,
-      processConnectionDatabaseTable::generateAvailableProcessConnectionId);
+      processConnectionDatabaseTable()::generateAvailableProcessConnectionId);
   }
 
   private CompletableFuture<List<UUID>> generateMultipleIds(
@@ -233,7 +236,7 @@ public final class ProcessModificationController extends TaskwolfRestController 
   }
 
   private void createProcess(
-    UUID processId, UUID creatorId, UUID ownerId, List<UUID> stepIds,
+    UUID processId, UUID creatorId, UUID ownerId, UUID teamId, List<UUID> stepIds,
     List<TaskwolfRequestBody> stepData, List<UUID> connectionIds,
     List<TaskwolfRequestBody> connectionData, long created, String name,
     String description
@@ -245,7 +248,7 @@ public final class ProcessModificationController extends TaskwolfRestController 
       createConnection(connectionIds.get(i), processId, connectionData.get(i),
         stepIds);
     }
-    processDatabaseTable.insertProcess(processId, creatorId, ownerId,
+    processDatabaseTable().insertProcess(processId, creatorId, ownerId, teamId,
       stepIds, connectionIds, created, name, description);
   }
 
@@ -255,7 +258,7 @@ public final class ProcessModificationController extends TaskwolfRestController 
     var todos = stepData.getObjectList("todos").stream()
       .map(workflow -> workflow.getString("todo")).toList();
     var workflow = stepData.has("workflow") ? stepData.getUUID("workflow") : null;
-    processStepDatabaseTable.insertProcessStep(stepId, processId,
+    processStepDatabaseTable().insertProcessStep(stepId, processId,
       stepData.getString("name"), stepData.getString("description"),
       todos, workflow, stepData.getString("type"),
       stepData.getInt("xCoordinate"), stepData.getInt("yCoordinate"));
@@ -265,7 +268,7 @@ public final class ProcessModificationController extends TaskwolfRestController 
     UUID connectionId, UUID processId, TaskwolfRequestBody connectionData,
     List<UUID> stepIds
   ) {
-    processConnectionDatabaseTable.insertProcessConnection(connectionId,
+    processConnectionDatabaseTable().insertProcessConnection(connectionId,
       processId, stepIds.get(connectionData.getInt("originStep")),
       stepIds.get(connectionData.getInt("destinationStep")));
   }
@@ -315,43 +318,17 @@ public final class ProcessModificationController extends TaskwolfRestController 
     HttpServletResponse response
   ) {
     var body = TaskwolfRequestBody.of(payload, response);
-    var processId = body.getUUID("process");
-    findUser(request).thenAccept(user ->
-      processDatabaseTable.processExists(processId).thenAccept(exists ->
-        deleteProcess(user, processId, exists)));
-  }
-
-  private void deleteProcess(User user, UUID processId, boolean processExists) {
-    if (!processExists) {
-      return;
-    }
-    processDatabaseTable.findProcess(processId).thenAccept(process ->
-      deleteProcess(user, process));
-  }
-
-  private void deleteProcess(User user, Process process) {
-    if (!checkProcessAuthorization(user, process)) {
-      return;
-    }
-    deleteProcess(process);
+    performProcessOperation(findUserId(request), body.getUUID("process"),
+      this::deleteProcess, () -> {});
   }
 
   public void deleteProcess(Process process) {
-    processDatabaseTable.deleteProcess(process.id());
+    processDatabaseTable().deleteProcess(process.id());
     for (var step : process.stepIds()) {
-      processStepDatabaseTable.deleteProcessStep(step);
+      processStepDatabaseTable().deleteProcessStep(step);
     }
     for (var connection : process.connectionIds()) {
-      processConnectionDatabaseTable.deleteProcessConnection(connection);
+      processConnectionDatabaseTable().deleteProcessConnection(connection);
     }
-  }
-
-  private boolean checkProcessAuthorization(User user, Process process) {
-    return checkProcessAuthorization(user, process.ownerId());
-  }
-
-  private boolean checkProcessAuthorization(User user, UUID processOwnerId) {
-    return processOwnerId.equals(user.id()) ||
-      user.organizations().contains(processOwnerId);
   }
 }

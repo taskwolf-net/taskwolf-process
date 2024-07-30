@@ -19,6 +19,7 @@ public final class ProcessDatabaseTable extends DatabaseTable {
       DatabaseColumn.Type.PRIMARY_KEY));
     columns.add(DatabaseColumn.create("creator", DatabaseDataType.UUID));
     columns.add(DatabaseColumn.create("owner", DatabaseDataType.UUID));
+    columns.add(DatabaseColumn.create("team", DatabaseDataType.UUID));
     columns.add(DatabaseListColumn.create("steps", DatabaseDataType.UUID));
     columns.add(DatabaseListColumn.create("connections", DatabaseDataType.UUID));
     columns.add(DatabaseColumn.create("created", DatabaseDataType.BIGINT));
@@ -36,15 +37,18 @@ public final class ProcessDatabaseTable extends DatabaseTable {
 
   public void insertProcess(Process process) {
     insertProcess(process.id(), process.creatorId(), process.ownerId(),
-      process.stepIds(), process.connectionIds(), process.created(),
-      process.name(), process.description());
+      process.teamId(), process.stepIds(), process.connectionIds(),
+      process.created(), process.name(), process.description());
   }
 
   public void insertProcess(
-    UUID id, UUID creatorId, UUID ownerId, List<UUID> stepIds,
+    UUID id, UUID creatorId, UUID ownerId, UUID teamId, List<UUID> stepIds,
     List<UUID> connectionIds, long created, String name, String description
   ) {
-    insert(DatabaseRow.of(id, creatorId, ownerId, stepIds, connectionIds,
+    if (teamId == null) {
+      teamId = UUID.fromString("00000000-0000-0000-0000-000000000000");
+    }
+    insert(DatabaseRow.of(id, creatorId, ownerId, teamId, stepIds, connectionIds,
       created, name, description));
   }
 
@@ -72,5 +76,24 @@ public final class ProcessDatabaseTable extends DatabaseTable {
   public CompletableFuture<List<Process>> findProcessesOfOwner(UUID ownerId) {
     return selectRows("owner=" + ownerId  + " ALLOW FILTERING").thenApply(rows ->
       rows.stream().map(Process::of).collect(Collectors.toList()));
+  }
+
+  public CompletableFuture<List<Process>> findOrganizationTeamProcesses(
+    UUID organizationId, UUID teamId
+  ) {
+    var query = "owner=" + organizationId + " AND team=" + teamId +
+      " ALLOW FILTERING";
+    return selectRows(query).thenApply(rows ->
+      rows.stream().map(Process::of).collect(Collectors.toList()));
+  }
+
+  public CompletableFuture<List<Process>> findGlobalOrganizationProcesses(
+    UUID organizationId
+  ) {
+    var query = "owner=" + organizationId + " AND " +
+      "team=00000000-0000-0000-0000-000000000000 ALLOW FILTERING";
+    return selectRows(query)
+      .thenApply(rows -> rows.stream().map(Process::of)
+        .collect(Collectors.toList()));
   }
 }

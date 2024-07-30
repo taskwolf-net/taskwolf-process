@@ -5,9 +5,8 @@ import com.google.common.collect.Maps;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import net.taskwolf.core.access.TaskwolfRequestBody;
-import net.taskwolf.core.access.TaskwolfRestController;
 import net.taskwolf.core.iterator.AsyncIterator;
-import net.taskwolf.core.iterator.AsyncListIterator;
+import net.taskwolf.core.organization.team.TeamTargetDatabaseTable;
 import net.taskwolf.core.user.User;
 import net.taskwolf.core.user.UserDatabaseTable;
 import net.taskwolf.core.user.UserTargetDatabaseTable;
@@ -26,19 +25,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.security.Key;
 import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 @RestController
-public final class ProcessInformationController extends TaskwolfRestController {
-  private final ProcessDatabaseTable processDatabaseTable;
-  private final ProcessStepDatabaseTable processStepDatabaseTable;
-  private final ProcessConnectionDatabaseTable processConnectionDatabaseTable;
+public final class ProcessInformationController extends ProcessController {
   private final WorkflowDatabaseTable workflowDatabaseTable;
-  private final UserTargetDatabaseTable userTargetDatabaseTable;
   private final SimpleDateFormat simpleDateFormat = new SimpleDateFormat("dd.MM.yyyy");
 
   private ProcessInformationController(
@@ -46,34 +38,41 @@ public final class ProcessInformationController extends TaskwolfRestController {
     ProcessDatabaseTable processDatabaseTable,
     ProcessStepDatabaseTable processStepDatabaseTable,
     ProcessConnectionDatabaseTable processConnectionDatabaseTable,
-    WorkflowDatabaseTable workflowDatabaseTable,
-    UserTargetDatabaseTable userTargetDatabaseTable
+    UserTargetDatabaseTable userTargetDatabaseTable,
+    TeamTargetDatabaseTable teamTargetDatabaseTable,
+    WorkflowDatabaseTable workflowDatabaseTable
   ) {
-    super(secretKey, userDatabaseTable);
-    this.processDatabaseTable = processDatabaseTable;
-    this.processStepDatabaseTable = processStepDatabaseTable;
-    this.processConnectionDatabaseTable = processConnectionDatabaseTable;
+    super(secretKey, userDatabaseTable, processDatabaseTable,
+      processStepDatabaseTable, processConnectionDatabaseTable,
+      userTargetDatabaseTable, teamTargetDatabaseTable);
     this.workflowDatabaseTable = workflowDatabaseTable;
-    this.userTargetDatabaseTable = userTargetDatabaseTable;
   }
 
   @RequestMapping(path = "/process/workflows/", method = RequestMethod.GET)
   public CompletableFuture<Map<String, Object>> findProcessWorkflows(
     HttpServletRequest request
   ) {
-    var futureResponse = new CompletableFuture<Map<String, Object>>();
-    userTargetDatabaseTable.findTargetSecured(findUserId(request))
-      .thenAccept(target -> findProcessWorkflows(target)
-        .thenAccept(futureResponse::complete));
-    return futureResponse;
+    var userId = findUserId(request);
+    return userTargetDatabaseTable().findTargetSecured(userId)
+      .thenCompose(target -> findProcessWorkflowsTeam(userId, target)
+        .thenCompose(team -> findProcessWorkflows(target, team)));
   }
 
   private CompletableFuture<Map<String, Object>> findProcessWorkflows(
-    UUID target
+    UUID target, Optional<UUID> team
   ) {
-    return workflowDatabaseTable.findWorkflowByOwnerAndModule(target, "process")
+    return workflowDatabaseTable.findWorkflowByModule(target, team, "process")
       .thenApply(workflows -> Map.of("workflows", workflows.stream().map(
         workflow -> Map.of("id", workflow.id(), "name", workflow.name())).toList()));
+  }
+
+  private CompletableFuture<Optional<UUID>> findProcessWorkflowsTeam(
+    UUID userId, UUID targetId
+  ) {
+    if (userId.equals(targetId)) {
+      return CompletableFuture.completedFuture(Optional.empty());
+    }
+    return teamTargetDatabaseTable().findTargetSecured(userId);
   }
 
   @RequestMapping(path = "/process/find/", method = RequestMethod.POST)
@@ -83,55 +82,19 @@ public final class ProcessInformationController extends TaskwolfRestController {
   ) {
     var body = TaskwolfRequestBody.of(payload, response);
     var futureResponse = new CompletableFuture<Map<String, Object>>();
-    findUser(request).thenAccept(user ->
-      processDatabaseTable.findProcess(body.getUUID("process"))
-        .thenAccept(process -> findProcess(user, process)
-          .thenAccept(futureResponse::complete)));
+    findUser(request).thenAccept(user -> performProcessOperation(user,
+      body.getUUID("process"), process -> gatherProcessInformation(process)
+        .thenAccept(futureResponse::complete),
+      () -> futureResponse.complete(Maps.newHashMap())));
     return futureResponse;
-  }
-
-  private CompletableFuture<Map<String, Object>> findProcess(
-    User user, Process process
-  ) {
-    if (!checkProcessAuthorization(user, process)) {
-      var futureResponse = new CompletableFuture<Map<String, Object>>();
-      futureResponse.complete(Maps.newHashMap());
-      return futureResponse;
-    }
-    return gatherProcessInformation(process);
   }
 
   @RequestMapping(path = "/processes/selected/", method = RequestMethod.GET)
   public CompletableFuture<Map<String, Object>> selectedProcesses(
     HttpServletRequest request
   ) {
-    var futureResponse = new CompletableFuture<Map<String, Object>>();
-    findUser(request).thenApply(user ->
-      userTargetDatabaseTable.findTargetSecured(user.id()).thenAccept(target ->
-        findSelectedProcesses(user, target).thenApply(futureResponse::complete)));
-    return futureResponse;
-  }
-
-  private CompletableFuture<Map<String, Object>> findSelectedProcesses(
-    User user, UUID ownerId
-  ) {
-    var futureResponse = new CompletableFuture<Map<String, Object>>();
-    if (!checkProcessAuthorization(user, ownerId)) {
-      futureResponse.complete(Maps.newHashMap());
-      return futureResponse;
-    }
-    collectProcesses(Lists.newArrayList(ownerId)).thenAccept(processes ->
-      collectProcessInformation(processes).thenAccept(futureResponse::complete));
-    return futureResponse;
-  }
-
-  private CompletableFuture<List<Process>> collectProcesses(
-    List<UUID> ownerIds
-  ) {
-    var futureResponse = new CompletableFuture<List<Process>>();
-    AsyncListIterator.execute(ownerIds, processDatabaseTable::findProcessesOfOwner)
-      .thenAccept(futureResponse::complete);
-    return futureResponse;
+    return findUser(request).thenCompose(user -> findViewableProcesses(user.id())
+      .thenCompose(this::collectProcessInformation));
   }
 
   private CompletableFuture<Map<String, Object>> collectProcessInformation(
@@ -152,9 +115,9 @@ public final class ProcessInformationController extends TaskwolfRestController {
   ) {
     var futureResponse = new CompletableFuture<Map<String, Object>>();
     userDatabaseTable().findUserIfExists(process.creatorId()).thenAccept(creator ->
-      processStepDatabaseTable.findProcessStepsByProcess(process.id())
+      processStepDatabaseTable().findProcessStepsByProcess(process.id())
         .thenAccept(steps -> findStepsWorkflow(steps).thenAccept(stepWorkflows ->
-          processConnectionDatabaseTable.findProcessConnectionsByProcess(process.id())
+          processConnectionDatabaseTable().findProcessConnectionsByProcess(process.id())
             .thenAccept(connections -> futureResponse.complete(
               assemblyProcessInformation(process, creator, stepWorkflows, connections))))));
     return futureResponse;
@@ -239,14 +202,5 @@ public final class ProcessInformationController extends TaskwolfRestController {
     Calendar calendar = Calendar.getInstance();
     calendar.setTimeInMillis(milliseconds);
     return simpleDateFormat.format(calendar.getTime());
-  }
-
-  private boolean checkProcessAuthorization(User user, Process process) {
-    return checkProcessAuthorization(user, process.ownerId());
-  }
-
-  private boolean checkProcessAuthorization(User user, UUID processOwnerId) {
-    return processOwnerId.equals(user.id()) ||
-      user.organizations().contains(processOwnerId);
   }
 }

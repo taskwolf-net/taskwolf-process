@@ -14,14 +14,16 @@ import java.util.UUID;
 public final class Process {
   public static Process of(DatabaseRow row) {
     return create(row.findCell(0).uuidValue(), row.findCell(1).uuidValue(),
-      row.findCell(2).uuidValue(), row.findCell(3).listValue(),
-      row.findCell(4).listValue(), row.findCell(5).longValue(),
-      row.findCell(6).stringValue(), row.findCell(7).stringValue());
+      row.findCell(2).uuidValue(),  row.findCell(3).uuidValue(),
+      row.findCell(4).listValue(), row.findCell(5).listValue(),
+      row.findCell(6).longValue(), row.findCell(7).stringValue(),
+      row.findCell(8).stringValue());
   }
 
   private final UUID id;
   private final UUID creatorId;
   private final UUID ownerId;
+  private final UUID teamId;
   private final List<UUID> stepIds;
   private final List<UUID> connectionIds;
   private final long created;
