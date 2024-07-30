@@ -90,8 +90,9 @@ public final class ProcessModificationController extends ProcessController {
     findUser(request).thenAccept(user ->
       checkProcessIntegrity(user, name, description, steps, connections)
         .thenApply(success -> success ? processDatabaseTable().findProcess(processId)
-          .thenAccept(process -> updateProcess(user, process, steps, connections,
-            name, description)) : null));
+          .thenAccept(process -> checkProcessTeamMatch(user.id(), process)
+            .thenAccept(teamMatch -> updateProcess(user, process, teamMatch,
+              steps, connections, name, description))) : null));
   }
 
   private CompletableFuture<Boolean> checkProcessIntegrity(
@@ -166,11 +167,11 @@ public final class ProcessModificationController extends ProcessController {
   }
 
   private void updateProcess(
-    User user, Process process, List<TaskwolfRequestBody> stepData,
-    List<TaskwolfRequestBody> connectionData, String name,
-    String description
+    User user, Process process, boolean teamMatch,
+    List<TaskwolfRequestBody> stepData, List<TaskwolfRequestBody> connectionData,
+    String name, String description
   ) {
-    if (!checkProcessAuthorization(user, process)) {
+    if (!checkProcessAuthorization(user, process) || !teamMatch) {
       return;
     }
     deleteProcess(process);
@@ -292,11 +293,14 @@ public final class ProcessModificationController extends ProcessController {
       return;
     }
     workflowDatabaseTable.findWorkflow(workflowId).thenAccept(workflow ->
-      executeProcessStepWorkflow(user, workflow));
+      checkProcessTeamMatch(user.id(), workflow.teamId()).thenAccept(teamMatch ->
+        executeProcessStepWorkflow(user, workflow, teamMatch)));
   }
 
-  private void executeProcessStepWorkflow(User user, WorkflowEntry workflowEntry) {
-    if (!checkWorkflowAuthorization(user, workflowEntry.ownerId())) {
+  private void executeProcessStepWorkflow(
+    User user, WorkflowEntry workflowEntry, boolean teamMatch
+  ) {
+    if (!checkWorkflowAuthorization(user, workflowEntry.ownerId()) || !teamMatch) {
       return;
     }
     executeProcessStepWorkflow(workflowEntry);
