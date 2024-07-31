@@ -54,25 +54,24 @@ public final class ProcessInformationController extends ProcessController {
   ) {
     var userId = findUserId(request);
     return userTargetDatabaseTable().findTargetSecured(userId)
-      .thenCompose(target -> findProcessWorkflowsTeam(userId, target)
-        .thenCompose(team -> findProcessWorkflows(target, team)));
+      .thenCompose(target -> findProcessWorkflowOwner(userId, target)
+        .thenCompose(this::findProcessWorkflows));
   }
 
-  private CompletableFuture<Map<String, Object>> findProcessWorkflows(
-    UUID target, Optional<UUID> team
-  ) {
-    return workflowDatabaseTable.findWorkflowByModule(target, team, "process")
+  private CompletableFuture<Map<String, Object>> findProcessWorkflows(UUID owner) {
+    return workflowDatabaseTable.findWorkflowByModule(owner, "process")
       .thenApply(workflows -> Map.of("workflows", workflows.stream().map(
         workflow -> Map.of("id", workflow.id(), "name", workflow.name())).toList()));
   }
 
-  private CompletableFuture<Optional<UUID>> findProcessWorkflowsTeam(
+  private CompletableFuture<UUID> findProcessWorkflowOwner(
     UUID userId, UUID targetId
   ) {
     if (userId.equals(targetId)) {
-      return CompletableFuture.completedFuture(Optional.empty());
+      return CompletableFuture.completedFuture(userId);
     }
-    return teamTargetDatabaseTable().findTargetSecured(userId);
+    return teamTargetDatabaseTable().findTargetSecured(userId)
+      .thenApply(teamTarget -> teamTarget.orElse(targetId));
   }
 
   @RequestMapping(path = "/process/find/", method = RequestMethod.POST)

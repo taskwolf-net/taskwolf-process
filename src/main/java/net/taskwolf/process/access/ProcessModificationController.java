@@ -64,16 +64,16 @@ public final class ProcessModificationController extends ProcessController {
       checkProcessIntegrity(user, name, description, steps, connections)
         .thenApply(success -> success ?
           userTargetDatabaseTable().findTargetSecured(user.id()).thenAccept(target ->
-            findTeam(user, target).thenAccept(team ->
-              createProcess(user, target, team, steps, connections, created,
+            findProcessOwner(user, target).thenAccept(owner ->
+              createProcess(user, owner, steps, connections, created,
                 name, description))) : null));
   }
 
-  private CompletableFuture<UUID> findTeam(User user, UUID target) {
+  private CompletableFuture<UUID> findProcessOwner(User user, UUID target) {
     return user.id().equals(target) ?
-      CompletableFuture.completedFuture(null) :
+      CompletableFuture.completedFuture(target) :
       teamTargetDatabaseTable().findTargetSecured(user.id())
-        .thenApply(team -> team.orElse(null));
+        .thenApply(team -> team.orElse(target));
   }
 
   @RequestMapping(path = "/process/update/", method = RequestMethod.POST)
@@ -90,9 +90,9 @@ public final class ProcessModificationController extends ProcessController {
     findUser(request).thenAccept(user ->
       checkProcessIntegrity(user, name, description, steps, connections)
         .thenApply(success -> success ? processDatabaseTable().findProcess(processId)
-          .thenAccept(process -> checkProcessTeamMatch(user.id(), process)
-            .thenAccept(teamMatch -> updateProcess(user, process, teamMatch,
-              steps, connections, name, description))) : null));
+          .thenAccept(process -> checkProcessAuthorization(user, process)
+            .thenAccept(authorized -> updateProcess(process, authorized, steps,
+              connections, name, description))) : null));
   }
 
   private CompletableFuture<Boolean> checkProcessIntegrity(
@@ -163,45 +163,41 @@ public final class ProcessModificationController extends ProcessController {
       return CompletableFuture.completedFuture(true);
     }
     return workflowDatabaseTable.findWorkflow(step.getUUID("workflow"))
-      .thenApply(workflow -> checkWorkflowAuthorization(user, workflow.ownerId()));
+      .thenCompose(workflow -> checkWorkflowAuthorization(user, workflow.ownerId()));
   }
 
   private void updateProcess(
-    User user, Process process, boolean teamMatch,
-    List<TaskwolfRequestBody> stepData, List<TaskwolfRequestBody> connectionData,
-    String name, String description
+    Process process, boolean authorized, List<TaskwolfRequestBody> stepData,
+    List<TaskwolfRequestBody> connectionData, String name, String description
   ) {
-    if (!checkProcessAuthorization(user, process) || !teamMatch) {
+    if (!authorized) {
       return;
     }
     deleteProcess(process);
     userDatabaseTable().findUser(process.creatorId()).thenAccept(creator ->
       processDatabaseTable().generateAvailableProcessId().thenAccept(processId ->
-        createProcess(processId, creator, process.ownerId(), process.teamId(),
-          stepData, connectionData, process.created(), name, description)));
+        createProcess(processId, creator, process.ownerId(), stepData,
+          connectionData, process.created(), name, description)));
   }
 
   private void createProcess(
-    User creator, UUID ownerId, UUID teamId, List<TaskwolfRequestBody> stepData,
+    User creator, UUID ownerId, List<TaskwolfRequestBody> stepData,
     List<TaskwolfRequestBody> connectionData, long created, String name,
     String description
   ) {
-    if (!checkProcessAuthorization(creator, ownerId)) {
-      return;
-    }
     processDatabaseTable().generateAvailableProcessId().thenAccept(processId ->
-      createProcess(processId, creator, ownerId, teamId, stepData, connectionData,
+      createProcess(processId, creator, ownerId, stepData, connectionData,
         created, name, description));
   }
 
   private void createProcess(
-    UUID processId, User creator, UUID ownerId, UUID teamId,
+    UUID processId, User creator, UUID ownerId,
     List<TaskwolfRequestBody> stepData, List<TaskwolfRequestBody> connectionData,
     long created, String name, String description
   ) {
     generateStepIds(stepData.size()).thenAccept(stepIds ->
       generateConnectionIds(connectionData.size()).thenAccept(connectionIds ->
-        createProcess(processId, creator.id(), ownerId, teamId, stepIds, stepData,
+        createProcess(processId, creator.id(), ownerId, stepIds, stepData,
           connectionIds, connectionData, created, name, description)));
   }
 
@@ -237,7 +233,7 @@ public final class ProcessModificationController extends ProcessController {
   }
 
   private void createProcess(
-    UUID processId, UUID creatorId, UUID ownerId, UUID teamId, List<UUID> stepIds,
+    UUID processId, UUID creatorId, UUID ownerId, List<UUID> stepIds,
     List<TaskwolfRequestBody> stepData, List<UUID> connectionIds,
     List<TaskwolfRequestBody> connectionData, long created, String name,
     String description
@@ -249,7 +245,7 @@ public final class ProcessModificationController extends ProcessController {
       createConnection(connectionIds.get(i), processId, connectionData.get(i),
         stepIds);
     }
-    processDatabaseTable().insertProcess(processId, creatorId, ownerId, teamId,
+    processDatabaseTable().insertProcess(processId, creatorId, ownerId,
       stepIds, connectionIds, created, name, description);
   }
 
@@ -293,14 +289,14 @@ public final class ProcessModificationController extends ProcessController {
       return;
     }
     workflowDatabaseTable.findWorkflow(workflowId).thenAccept(workflow ->
-      checkProcessTeamMatch(user.id(), workflow.teamId()).thenAccept(teamMatch ->
-        executeProcessStepWorkflow(user, workflow, teamMatch)));
+      checkWorkflowAuthorization(user, workflow.ownerId()).thenAccept(authorized ->
+        executeProcessStepWorkflow(workflow, authorized)));
   }
 
   private void executeProcessStepWorkflow(
-    User user, WorkflowEntry workflowEntry, boolean teamMatch
+    WorkflowEntry workflowEntry, boolean authorized
   ) {
-    if (!checkWorkflowAuthorization(user, workflowEntry.ownerId()) || !teamMatch) {
+    if (!authorized) {
       return;
     }
     executeProcessStepWorkflow(workflowEntry);
@@ -311,9 +307,17 @@ public final class ProcessModificationController extends ProcessController {
       workflow.trigger(Maps.newHashMap()));
   }
 
-  private boolean checkWorkflowAuthorization(User user, UUID workflowOwnerId) {
-    return workflowOwnerId.equals(user.id()) ||
-      user.organizations().contains(workflowOwnerId);
+  private CompletableFuture<Boolean> checkWorkflowAuthorization(
+    User user, UUID workflowOwnerId
+  ) {
+    if (workflowOwnerId.equals(user.id()) ||
+      user.organizations().contains(workflowOwnerId)
+    ) {
+      return CompletableFuture.completedFuture(true);
+    }
+    return teamTargetDatabaseTable().findTargetSecured(user.id())
+      .thenApply(teamTarget -> teamTarget.map(uuid ->
+        uuid.equals(workflowOwnerId)).orElse(false));
   }
 
   @RequestMapping(path = "/process/remove/", method = RequestMethod.POST)

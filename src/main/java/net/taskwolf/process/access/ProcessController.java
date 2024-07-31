@@ -15,7 +15,6 @@ import net.taskwolf.process.structure.step.ProcessStepDatabaseTable;
 
 import java.security.Key;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -71,64 +70,38 @@ public class ProcessController extends TaskwolfRestController {
       return;
     }
     processDatabaseTable.findProcess(processId).thenAccept(process ->
-      performProcessOperation(user, process, operation, failResponse));
+      checkProcessAuthorization(user, process).thenAccept(authorized ->
+        performProcessOperation(process, authorized, operation, failResponse)));
   }
 
   private void performProcessOperation(
-    User user, Process process, Consumer<Process> operation,
+    Process process, boolean authorized, Consumer<Process> operation,
     Runnable failResponse
   ) {
-    if (!checkProcessAuthorization(user, process)) {
-      failResponse.run();
-      return;
-    }
-    checkProcessTeamMatch(user.id(), process).thenAccept(teamMatch ->
-      performProcessOperation(process, teamMatch, operation, failResponse));
-  }
-
-  private void performProcessOperation(
-    Process process, boolean teamMatch, Consumer<Process> operation,
-    Runnable failResponse
-  ) {
-    if (!teamMatch) {
+    if (!authorized) {
       failResponse.run();
       return;
     }
     operation.accept(process);
   }
 
-  protected CompletableFuture<Boolean> checkProcessTeamMatch(
-    UUID userId, Process process
+  protected CompletableFuture<Boolean> checkProcessAuthorization(
+    User user, Process process
   ) {
-    return checkProcessTeamMatch(userId, process.teamId());
-  }
-
-  protected CompletableFuture<Boolean> checkProcessTeamMatch(
-    UUID userId, UUID teamId
-  ) {
-    return teamTargetDatabaseTable.findTargetSecured(userId)
-      .thenApply(target -> checkProcessTeamMatch(teamId, target));
-  }
-
-  private static final UUID DEFAULT_TEAM_ID =
-    UUID.fromString("00000000-0000-0000-0000-000000000000");
-
-  protected boolean checkProcessTeamMatch(
-    UUID teamId, Optional<UUID> userTeamTarget
-  ) {
-    if (userTeamTarget.isEmpty()) {
-      return teamId.equals(DEFAULT_TEAM_ID);
-    }
-    return userTeamTarget.get().equals(teamId);
-  }
-
-  protected boolean checkProcessAuthorization(User user, Process process) {
     return checkProcessAuthorization(user, process.ownerId());
   }
 
-  protected boolean checkProcessAuthorization(User user, UUID processOwnerId) {
-    return processOwnerId.equals(user.id()) ||
-      user.organizations().contains(processOwnerId);
+  protected CompletableFuture<Boolean> checkProcessAuthorization(
+    User user, UUID processOwnerId
+  ) {
+    if (processOwnerId.equals(user.id()) ||
+      user.organizations().contains(processOwnerId)
+    ) {
+      return CompletableFuture.completedFuture(true);
+    }
+    return teamTargetDatabaseTable.findTargetSecured(user.id())
+      .thenApply(teamTarget -> teamTarget.map(uuid ->
+        uuid.equals(processOwnerId)).orElse(false));
   }
 
   protected CompletableFuture<List<Process>> findViewableProcesses(UUID userId) {
@@ -141,9 +114,7 @@ public class ProcessController extends TaskwolfRestController {
   ) {
     return userId.equals(target) ?
       processDatabaseTable.findProcessesOfOwner(target) :
-      teamTargetDatabaseTable.findTargetSecured(userId)
-        .thenCompose(team -> team.isEmpty() ?
-          processDatabaseTable.findGlobalOrganizationProcesses(target) :
-          processDatabaseTable.findOrganizationTeamProcesses(target, team.get()));
+      teamTargetDatabaseTable.findTargetSecured(userId).thenCompose(team ->
+        processDatabaseTable.findProcessesOfOwner(team.orElse(target)));
   }
 }
