@@ -19,6 +19,7 @@ public class ProcessInjectionModule extends AbstractModule {
   ) {
     var processDatabaseTable = ProcessDatabaseTable.create(connection, keyspace);
     processDatabaseTable.createIfNotExists();
+    processDatabaseTable.createIndexIfNotExists("owner");
     return processDatabaseTable;
   }
 
@@ -29,6 +30,7 @@ public class ProcessInjectionModule extends AbstractModule {
   ) {
     var processStepDatabaseTable = ProcessStepDatabaseTable.create(connection, keyspace);
     processStepDatabaseTable.createIfNotExists();
+    processStepDatabaseTable.createIndexIfNotExists("process");
     return processStepDatabaseTable;
   }
 
@@ -40,6 +42,7 @@ public class ProcessInjectionModule extends AbstractModule {
     var processConnectionDatabaseTable = ProcessConnectionDatabaseTable.create(
       connection, keyspace);
     processConnectionDatabaseTable.createIfNotExists();
+    processConnectionDatabaseTable.createIndexIfNotExists("process");
     return processConnectionDatabaseTable;
   }
 }

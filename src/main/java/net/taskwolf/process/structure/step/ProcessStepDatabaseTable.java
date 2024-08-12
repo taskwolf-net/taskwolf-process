@@ -73,7 +73,7 @@ public final class ProcessStepDatabaseTable extends DatabaseTable {
   public CompletableFuture<List<ProcessStep>> findProcessStepsByProcess(
     UUID processId
   ) {
-    return selectRows("process=" + processId + " ALLOW FILTERING")
+    return selectRows("process=" + processId)
       .thenApply(rows -> rows.stream().map(ProcessStep::of)
         .collect(Collectors.toList()));
   }

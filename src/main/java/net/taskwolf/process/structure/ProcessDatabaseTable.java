@@ -70,7 +70,7 @@ public final class ProcessDatabaseTable extends DatabaseTable {
   }
 
   public CompletableFuture<List<Process>> findProcessesOfOwner(UUID ownerId) {
-    return selectRows("owner=" + ownerId  + " ALLOW FILTERING").thenApply(rows ->
+    return selectRows("owner=" + ownerId).thenApply(rows ->
       rows.stream().map(Process::of).collect(Collectors.toList()));
   }
 }

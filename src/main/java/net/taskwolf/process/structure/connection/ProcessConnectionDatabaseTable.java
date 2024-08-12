@@ -67,7 +67,7 @@ public final class ProcessConnectionDatabaseTable extends DatabaseTable {
   public CompletableFuture<List<ProcessConnection>> findProcessConnectionsByProcess(
     UUID processId
   ) {
-    return selectRows("process=" + processId + " ALLOW FILTERING")
+    return selectRows("process=" + processId)
       .thenApply(rows -> rows.stream().map(ProcessConnection::of)
         .collect(Collectors.toList()));
   }
