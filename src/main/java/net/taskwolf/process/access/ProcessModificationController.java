@@ -6,7 +6,10 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import net.taskwolf.core.CoreModule;
 import net.taskwolf.core.access.TaskwolfRequestBody;
+import net.taskwolf.core.bundle.BundleDatabaseTable;
 import net.taskwolf.core.iterator.AsyncIterator;
+import net.taskwolf.core.organization.team.Team;
+import net.taskwolf.core.organization.team.TeamDatabaseTable;
 import net.taskwolf.core.organization.team.TeamTargetDatabaseTable;
 import net.taskwolf.core.user.User;
 import net.taskwolf.core.user.UserDatabaseTable;
@@ -27,9 +30,12 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Stream;
 
 @RestController
 public final class ProcessModificationController extends ProcessController {
+  private final BundleDatabaseTable bundleDatabaseTable;
+  private final TeamDatabaseTable teamDatabaseTable;
   private final WorkflowDatabaseTable workflowDatabaseTable;
   private final CoreModule coreModule;
 
@@ -40,17 +46,20 @@ public final class ProcessModificationController extends ProcessController {
     ProcessConnectionDatabaseTable processConnectionDatabaseTable,
     UserTargetDatabaseTable userTargetDatabaseTable,
     TeamTargetDatabaseTable teamTargetDatabaseTable,
+    BundleDatabaseTable bundleDatabaseTable, TeamDatabaseTable teamDatabaseTable,
     WorkflowDatabaseTable workflowDatabaseTable, CoreModule coreModule
   ) {
     super(secretKey, userDatabaseTable, processDatabaseTable,
       processStepDatabaseTable, processConnectionDatabaseTable,
       userTargetDatabaseTable, teamTargetDatabaseTable);
+    this.bundleDatabaseTable = bundleDatabaseTable;
+    this.teamDatabaseTable = teamDatabaseTable;
     this.workflowDatabaseTable = workflowDatabaseTable;
     this.coreModule = coreModule;
   }
 
   @RequestMapping(path = "/process/add/", method = RequestMethod.POST)
-  public void addProcess(
+  public CompletableFuture<Void> addProcess(
     HttpServletRequest request, @RequestBody String payload,
     HttpServletResponse response
   ) {
@@ -60,13 +69,14 @@ public final class ProcessModificationController extends ProcessController {
     var description = body.getString("description");
     var steps = body.getObjectList("steps");
     var connections = body.getObjectList("connections");
-    findUser(request).thenAccept(user ->
+    return findUser(request).thenCompose(user ->
       checkProcessIntegrity(user, name, description, steps, connections)
-        .thenApply(success -> success ?
-          userTargetDatabaseTable().findTargetSecured(user.id()).thenAccept(target ->
-            findProcessOwner(user, target).thenAccept(owner ->
-              createProcess(user, owner, steps, connections, created,
-                name, description))) : null));
+        .thenCompose(success -> success ?
+          userTargetDatabaseTable().findTargetSecured(user.id()).thenCompose(target ->
+            findProcessOwner(user, target).thenCompose(owner ->
+              checkProcessNumberLimit(user, target).thenAccept(limitReached ->
+                addProcess(user, owner, steps, connections, created,
+                  name, description, limitReached, response)))) : null));
   }
 
   private CompletableFuture<UUID> findProcessOwner(User user, UUID target) {
@@ -74,6 +84,38 @@ public final class ProcessModificationController extends ProcessController {
       CompletableFuture.completedFuture(target) :
       teamTargetDatabaseTable().findTargetSecured(user.id())
         .thenApply(team -> team.orElse(target));
+  }
+
+  private CompletableFuture<Boolean> checkProcessNumberLimit(User user, UUID target) {
+    return findOwnersOfTarget(user, target)
+      .thenCompose(owners -> AsyncIterator.execute(owners, owner ->
+          processDatabaseTable().findProcessesOfOwner(owner).thenApply(List::size))
+        .thenApply(sizes -> sizes.stream().mapToInt(Integer::intValue).sum())
+        .thenCompose(number -> bundleDatabaseTable.findBundle(target)
+          .thenApply(bundle ->  bundle.webhookNumberLimit() > 0 &&
+            number >= bundle.webhookNumberLimit())));
+  }
+
+  private CompletableFuture<List<UUID>> findOwnersOfTarget(User user, UUID target) {
+    return user.id().equals(target) ?
+      CompletableFuture.completedFuture(Lists.newArrayList(target)) :
+      teamDatabaseTable.findTeamsByOrganization(target).thenApply(teams ->
+        Stream.concat(teams.stream().map(Team::id).toList().stream(),
+          Stream.of(target)).toList());
+  }
+
+
+  private void addProcess(
+    User creator, UUID ownerId, List<TaskwolfRequestBody> stepData,
+    List<TaskwolfRequestBody> connectionData, long created, String name,
+    String description, boolean limitReached, HttpServletResponse response
+  ) {
+    if (limitReached) {
+      response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+      return;
+    }
+    createProcess(creator, ownerId, stepData, connectionData, created, name,
+      description);
   }
 
   @RequestMapping(path = "/process/update/", method = RequestMethod.POST)
