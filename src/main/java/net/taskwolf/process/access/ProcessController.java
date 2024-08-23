@@ -104,17 +104,16 @@ public class ProcessController extends TaskwolfRestController {
         uuid.equals(processOwnerId)).orElse(false));
   }
 
-  protected CompletableFuture<List<Process>> findViewableProcesses(UUID userId) {
+  protected CompletableFuture<UUID> findProcessTarget(UUID userId) {
     return userTargetDatabaseTable.findTargetSecured(userId)
-      .thenCompose(target -> findViewableProcesses(userId, target));
+      .thenCompose(target -> findProcessTarget(userId, target));
   }
 
-  protected CompletableFuture<List<Process>> findViewableProcesses(
+  private CompletableFuture<UUID> findProcessTarget(
     UUID userId, UUID target
   ) {
-    return userId.equals(target) ?
-      processDatabaseTable.findProcessesOfOwner(target) :
-      teamTargetDatabaseTable.findTargetSecured(userId).thenCompose(team ->
-        processDatabaseTable.findProcessesOfOwner(team.orElse(target)));
+    return userId.equals(target) ? CompletableFuture.completedFuture(target) :
+      teamTargetDatabaseTable.findTargetSecured(userId)
+        .thenApply(team -> team.orElse(target));
   }
 }

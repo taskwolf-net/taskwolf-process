@@ -17,10 +17,7 @@ public class ProcessInjectionModule extends AbstractModule {
   ProcessDatabaseTable provideProcessDatabaseTable(
     DatabaseConnection connection, DatabaseKeyspace keyspace
   ) {
-    var processDatabaseTable = ProcessDatabaseTable.create(connection, keyspace);
-    processDatabaseTable.createIfNotExists();
-    processDatabaseTable.createIndexIfNotExists("owner");
-    return processDatabaseTable;
+    return ProcessDatabaseTable.create(connection, keyspace);
   }
 
   @Provides

@@ -5,6 +5,9 @@ import com.google.common.collect.Maps;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import net.taskwolf.core.access.TaskwolfRequestBody;
+import net.taskwolf.core.database.DatabaseDirection;
+import net.taskwolf.core.database.DatabaseOrder;
+import net.taskwolf.core.database.DatabasePage;
 import net.taskwolf.core.iterator.AsyncIterator;
 import net.taskwolf.core.organization.team.TeamTargetDatabaseTable;
 import net.taskwolf.core.user.User;
@@ -88,25 +91,74 @@ public final class ProcessInformationController extends ProcessController {
     return futureResponse;
   }
 
-  @RequestMapping(path = "/processes/selected/", method = RequestMethod.GET)
-  public CompletableFuture<Map<String, Object>> selectedProcesses(
-    HttpServletRequest request
+  @RequestMapping(path = "/processes/page/", method = RequestMethod.POST)
+  public CompletableFuture<Map<String, Object>> findProcessPage(
+    HttpServletRequest request, @RequestBody String payload,
+    HttpServletResponse response
   ) {
-    return findUser(request).thenCompose(user -> findViewableProcesses(user.id())
-      .thenCompose(this::collectProcessInformation));
+    var body = TaskwolfRequestBody.of(payload, response);
+    var targetPage = body.getInt("targetPage");
+    var sortingColumn = body.getString("sorting");
+    var sortingOrder = DatabaseOrder.valueOf(body.getString("order"));
+    var search = body.getString("search");
+    var creatorId = body.has("creator") ? body.getUUID("creator") : null;
+    var startTime = body.has("startTime") ? body.getLong("startTime") : -1;
+    var endTime = body.has("endTime") ? body.getLong("endTime") : -1;
+    return findProcessTarget(findUserId(request)).thenCompose(target ->
+      processDatabaseTable().findProcessesOfOwner(target, targetPage,
+          sortingColumn, sortingOrder, search, creatorId, startTime, endTime)
+        .thenCompose(this::collectProcessInformation));
+  }
+
+  @RequestMapping(path = "/processes/page/shift/", method = RequestMethod.POST)
+  public CompletableFuture<Map<String, Object>> findPreviousProcessPage(
+    HttpServletRequest request, @RequestBody String payload,
+    HttpServletResponse response
+  ) {
+    var body = TaskwolfRequestBody.of(payload, response);
+    var pageState = body.getString("pageState");
+    var startingPoint = DatabaseDirection.valueOf(body.getString("startingPoint"));
+    var direction = DatabaseDirection.valueOf(body.getString("direction"));
+    var sortingColumn = body.getString("sorting");
+    var sortingOrder = DatabaseOrder.valueOf(body.getString("order"));
+    var creatorId = body.has("creator") ? body.getUUID("creator") : null;
+    var startTime = body.has("startTime") ? body.getLong("startTime") : -1;
+    var endTime = body.has("endTime") ? body.getLong("endTime") : -1;
+    return findProcessTarget(findUserId(request)).thenCompose(target ->
+      processDatabaseTable().findProcessesOfOwner(target, pageState,
+          startingPoint, direction, sortingColumn, sortingOrder, creatorId,
+          startTime, endTime)
+        .thenCompose(this::collectProcessInformation));
   }
 
   private CompletableFuture<Map<String, Object>> collectProcessInformation(
-    List<Process> processes
+    DatabasePage<Process> page
   ) {
-    if (processes.isEmpty()) {
+    if (page.content().isEmpty()) {
       return CompletableFuture.completedFuture(Map.of("processes",
-        Lists.newArrayList()));
+        Lists.newArrayList(), "page", page.pageState(), "pageNumber", 0));
     }
     var futureResponse = new CompletableFuture<Map<String, Object>>();
-    AsyncIterator.execute(processes, this::gatherProcessInformation).thenAccept(
-      information -> futureResponse.complete(Map.of("processes", information)));
+    AsyncIterator.execute(page.content(), this::gatherProcessInformation)
+      .thenApply(information -> reconstructProcessOrder(page, information))
+      .thenAccept(information -> futureResponse.complete(Map.of("processes",
+        information, "page", page.pageState(), "pageNumber", page.pageNumber())));
     return futureResponse;
+  }
+
+  private List<Map<String, Object>> reconstructProcessOrder(
+    DatabasePage<Process> page, List<Map<String, Object>> information
+  ) {
+    var result = Lists.<Map<String, Object>>newArrayList();
+    for (var process : page.content()) {
+      for (var entry : information) {
+        if (process.id().toString().equals(entry.get("id").toString())) {
+          result.add(entry);
+          break;
+        }
+      }
+    }
+    return result;
   }
 
   private CompletableFuture<Map<String, Object>> gatherProcessInformation(

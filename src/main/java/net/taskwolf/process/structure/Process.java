@@ -3,7 +3,11 @@ package net.taskwolf.process.structure;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
+import net.taskwolf.core.database.DatabaseColumn;
 import net.taskwolf.core.database.DatabaseRow;
+import net.taskwolf.core.database.DatabaseTable;
+import net.taskwolf.core.workflow.WorkflowEntry;
+import net.taskwolf.core.workflow.WorkflowState;
 
 import java.util.List;
 import java.util.UUID;
@@ -12,16 +16,24 @@ import java.util.UUID;
 @Accessors(fluent = true)
 @RequiredArgsConstructor(staticName = "create")
 public final class Process {
-  public static Process of(DatabaseRow row) {
-    return create(row.findCell(0).uuidValue(), row.findCell(1).uuidValue(),
-      row.findCell(2).uuidValue(), row.findCell(3).listValue(),
-      row.findCell(4).listValue(), row.findCell(5).longValue(),
-      row.findCell(6).stringValue(), row.findCell(7).stringValue());
+  public static Process of(DatabaseRow row, DatabaseTable table) {
+    return of(row, table.columns().stream().map(DatabaseColumn::name).toList());
   }
 
+  public static Process of(DatabaseRow row, List<String> columns) {
+    return create(row.findCell(columns.indexOf("owner")).uuidValue(),
+      row.findCell(columns.indexOf("id")).uuidValue(),
+      row.findCell(columns.indexOf("creator")).uuidValue(),
+      row.findCell(columns.indexOf("steps")).listValue(),
+      row.findCell(columns.indexOf("connections")).listValue(),
+      row.findCell(columns.indexOf("created")).longValue(),
+      row.findCell(columns.indexOf("name")).stringValue(),
+      row.findCell(columns.indexOf("description")).stringValue());
+  }
+
+  private final UUID ownerId;
   private final UUID id;
   private final UUID creatorId;
-  private final UUID ownerId;
   private final List<UUID> stepIds;
   private final List<UUID> connectionIds;
   private final long created;

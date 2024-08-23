@@ -6,7 +6,6 @@ import net.taskwolf.core.database.*;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 public final class ProcessDatabaseTable extends DatabaseTable {
   private static final String TABLE_NAME = "process";
@@ -15,17 +14,31 @@ public final class ProcessDatabaseTable extends DatabaseTable {
     DatabaseConnection connection, DatabaseKeyspace keyspace
   ) {
     var columns = Lists.<DatabaseColumn>newArrayList();
+    columns.add(DatabaseColumn.create("owner", DatabaseDataType.UUID,
+      DatabaseColumn.Type.PARTITION_KEY));
     columns.add(DatabaseColumn.create("id", DatabaseDataType.UUID,
-      DatabaseColumn.Type.PRIMARY_KEY));
+      DatabaseColumn.Type.CLUSTERING_KEY));
     columns.add(DatabaseColumn.create("creator", DatabaseDataType.UUID));
-    columns.add(DatabaseColumn.create("owner", DatabaseDataType.UUID));
     columns.add(DatabaseListColumn.create("steps", DatabaseDataType.UUID));
     columns.add(DatabaseListColumn.create("connections", DatabaseDataType.UUID));
     columns.add(DatabaseColumn.create("created", DatabaseDataType.BIGINT));
     columns.add(DatabaseColumn.create("name", DatabaseDataType.TEXT));
     columns.add(DatabaseColumn.create("description", DatabaseDataType.TEXT));
-    return new ProcessDatabaseTable(connection, keyspace, TABLE_NAME, columns);
+    var table = new ProcessDatabaseTable(connection, keyspace, TABLE_NAME, columns);
+    table.createIfNotExists();
+    table.createIndexIfNotExists("id");
+    table.createIndexIfNotExists("name",
+      "'org.apache.cassandra.index.sasi.SASIIndex' WITH OPTIONS = " +
+        "{'mode': 'CONTAINS', 'analyzer_class': " +
+        "'org.apache.cassandra.index.sasi.analyzer.NonTokenizingAnalyzer', " +
+        "'case_sensitive': 'false'}");
+    table.initializeViews();
+    return table;
   }
+
+  private DatabaseTable nameView;
+  private DatabaseTable creatorView;
+  private DatabaseTable createdView;
 
   private ProcessDatabaseTable(
     DatabaseConnection connection, DatabaseKeyspace keyspace, String name,
@@ -34,22 +47,29 @@ public final class ProcessDatabaseTable extends DatabaseTable {
     super(connection, keyspace, name, columns);
   }
 
+  private void initializeViews() {
+    nameView = createMaterializedViewIfNotExists("name_view", "name");
+    creatorView = createMaterializedViewIfNotExists("creator_view", "creator");
+    createdView = createMaterializedViewIfNotExists("created_view", "created");
+  }
+
   public void insertProcess(Process process) {
-    insertProcess(process.id(), process.creatorId(), process.ownerId(),
+    insertProcess(process.ownerId(), process.id(), process.creatorId(),
       process.stepIds(), process.connectionIds(), process.created(),
       process.name(), process.description());
   }
 
   public void insertProcess(
-    UUID id, UUID creatorId, UUID ownerId, List<UUID> stepIds,
+    UUID ownerId, UUID id, UUID creatorId, List<UUID> stepIds,
     List<UUID> connectionIds, long created, String name, String description
   ) {
-    insert(DatabaseRow.of(id, creatorId, ownerId, stepIds, connectionIds,
+    insert(DatabaseRow.of(ownerId, id, creatorId, stepIds, connectionIds,
       created, name, description));
   }
 
   public void deleteProcess(UUID processId) {
-    delete(DatabaseCell.create(processId));
+    findProcess(processId).thenAccept(process ->
+      delete("owner=" + process.ownerId() + " AND id=" + process.id()));
   }
 
   public CompletableFuture<UUID> generateAvailableProcessId() {
@@ -62,15 +82,87 @@ public final class ProcessDatabaseTable extends DatabaseTable {
   }
 
   public CompletableFuture<Boolean> processExists(UUID processId) {
-    return exists(DatabaseCell.create(processId));
+    return exists("id=" + processId);
   }
 
   public CompletableFuture<Process> findProcess(UUID processId) {
-    return selectRow(DatabaseCell.create(processId)).thenApply(Process::of);
+    return selectRow("id=" + processId).thenApply(row ->
+      Process.of(row, this));
   }
 
-  public CompletableFuture<List<Process>> findProcessesOfOwner(UUID ownerId) {
+  private static final int PAGE_SIZE = 5;
+
+  public CompletableFuture<DatabasePage<Process>> findProcessesOfOwner(
+    UUID ownerId, int targetPage, String sortingColumn, DatabaseOrder sortingOrder,
+    String search, UUID creatorId, long startTime, long endTime
+  ) {
+    if (!search.isEmpty()) {
+      return selectRows("owner=" + ownerId + " AND name LIKE '%" + search +
+        "%' LIMIT " + PAGE_SIZE)
+        .thenApply(rows -> createProcessPage(DatabasePage.create(rows, "", 1), this));
+    }
+    var view = findTargetView(sortingColumn);
+    return view.selectPage(DatabaseCell.create(ownerId),
+        createProcessConditions(creatorId, startTime, endTime),
+        sortingOrder, PAGE_SIZE, targetPage)
+      .thenApply(page -> createProcessPage(page, view));
+  }
+
+  public CompletableFuture<DatabasePage<Process>> findProcessesOfOwner(
+    UUID ownerId, String pageState, DatabaseDirection startingPoint,
+    DatabaseDirection direction, String sortingColumn, DatabaseOrder sortingOrder,
+    UUID creatorId, long startTime, long endTime
+  ) {
+    var view = findTargetView(sortingColumn);
+    return view.shiftPage(DatabaseCell.create(ownerId),
+        createProcessConditions(creatorId, startTime, endTime),
+        sortingOrder, PAGE_SIZE, pageState, startingPoint, direction)
+      .thenApply(page -> createProcessPage(page, view));
+  }
+
+  private DatabaseTable findTargetView(String sortingColumn) {
+    if (sortingColumn.equals("name")) {
+      return nameView;
+    } else if (sortingColumn.equals("creator")) {
+      return creatorView;
+    } else if (sortingColumn.equals("created")) {
+      return createdView;
+    }
+    return null;
+  }
+
+  private List<String> createProcessConditions(
+    UUID creatorId, long startTime, long endTime
+  ) {
+    var conditions = Lists.<String>newArrayList();
+    if (creatorId != null) {
+      conditions.add("creator = " + creatorId);
+    }
+    if (startTime > 0) {
+      conditions.add("created >= " + startTime);
+    }
+    if (endTime > 0) {
+      conditions.add("created <= " + endTime);
+    }
+    return conditions;
+  }
+
+  private DatabasePage<Process> createProcessPage(
+    DatabasePage<DatabaseRow> page, DatabaseTable table
+  ) {
+    return DatabasePage.create(
+      page.content().stream().map(row -> Process.of(row, table)).toList(),
+      page.pageState(), page.pageNumber());
+  }
+
+  public CompletableFuture<Long> findProcessCount(UUID ownerId) {
+    return count("owner=" + ownerId);
+  }
+
+  public CompletableFuture<List<Process>> findAllProcessesOfOwner(
+    UUID ownerId
+  ) {
     return selectRows("owner=" + ownerId).thenApply(rows ->
-      rows.stream().map(Process::of).collect(Collectors.toList()));
+      rows.stream().map(row -> Process.of(row, this)).toList());
   }
 }

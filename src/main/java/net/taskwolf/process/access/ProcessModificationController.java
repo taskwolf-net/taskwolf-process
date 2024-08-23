@@ -89,8 +89,8 @@ public final class ProcessModificationController extends ProcessController {
   private CompletableFuture<Boolean> checkProcessNumberLimit(User user, UUID target) {
     return findOwnersOfTarget(user, target)
       .thenCompose(owners -> AsyncIterator.execute(owners, owner ->
-          processDatabaseTable().findProcessesOfOwner(owner).thenApply(List::size))
-        .thenApply(sizes -> sizes.stream().mapToInt(Integer::intValue).sum())
+          processDatabaseTable().findProcessCount(owner))
+        .thenApply(sizes -> sizes.stream().mapToLong(Long::longValue).sum())
         .thenCompose(number -> bundleDatabaseTable.findBundle(target)
           .thenApply(bundle ->  bundle.webhookNumberLimit() > 0 &&
             number >= bundle.webhookNumberLimit())));
@@ -103,7 +103,6 @@ public final class ProcessModificationController extends ProcessController {
         Stream.concat(teams.stream().map(Team::id).toList().stream(),
           Stream.of(target)).toList());
   }
-
 
   private void addProcess(
     User creator, UUID ownerId, List<TaskwolfRequestBody> stepData,
@@ -287,7 +286,7 @@ public final class ProcessModificationController extends ProcessController {
       createConnection(connectionIds.get(i), processId, connectionData.get(i),
         stepIds);
     }
-    processDatabaseTable().insertProcess(processId, creatorId, ownerId,
+    processDatabaseTable().insertProcess(ownerId, processId, creatorId,
       stepIds, connectionIds, created, name, description);
   }
 
