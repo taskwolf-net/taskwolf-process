@@ -287,7 +287,7 @@ public final class ProcessModificationController extends ProcessController {
         stepIds);
     }
     processDatabaseTable().insertProcess(ownerId, processId, creatorId,
-      stepIds, connectionIds, created, name, description);
+      stepIds, stepIds.size(), connectionIds, created, name, description);
   }
 
   private void createStep(
