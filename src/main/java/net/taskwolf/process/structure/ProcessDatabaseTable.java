@@ -20,6 +20,7 @@ public final class ProcessDatabaseTable extends DatabaseTable {
       DatabaseColumn.Type.CLUSTERING_KEY));
     columns.add(DatabaseColumn.create("creator", DatabaseDataType.UUID));
     columns.add(DatabaseListColumn.create("steps", DatabaseDataType.UUID));
+    columns.add(DatabaseColumn.create("stepCount", DatabaseDataType.INT));
     columns.add(DatabaseListColumn.create("connections", DatabaseDataType.UUID));
     columns.add(DatabaseColumn.create("created", DatabaseDataType.BIGINT));
     columns.add(DatabaseColumn.create("name", DatabaseDataType.TEXT));
@@ -39,6 +40,7 @@ public final class ProcessDatabaseTable extends DatabaseTable {
   private DatabaseTable nameView;
   private DatabaseTable creatorView;
   private DatabaseTable createdView;
+  private DatabaseTable stepView;
 
   private ProcessDatabaseTable(
     DatabaseConnection connection, DatabaseKeyspace keyspace, String name,
@@ -51,20 +53,21 @@ public final class ProcessDatabaseTable extends DatabaseTable {
     nameView = createMaterializedViewIfNotExists("name_view", "name");
     creatorView = createMaterializedViewIfNotExists("creator_view", "creator");
     createdView = createMaterializedViewIfNotExists("created_view", "created");
+    stepView = createMaterializedViewIfNotExists("step_view", "stepCount");
   }
 
   public void insertProcess(Process process) {
     insertProcess(process.ownerId(), process.id(), process.creatorId(),
-      process.stepIds(), process.connectionIds(), process.created(),
-      process.name(), process.description());
+      process.stepIds(), process.stepCount(), process.connectionIds(),
+      process.created(), process.name(), process.description());
   }
 
   public void insertProcess(
-    UUID ownerId, UUID id, UUID creatorId, List<UUID> stepIds,
+    UUID ownerId, UUID id, UUID creatorId, List<UUID> stepIds, int stepCount,
     List<UUID> connectionIds, long created, String name, String description
   ) {
-    insert(DatabaseRow.of(ownerId, id, creatorId, stepIds, connectionIds,
-      created, name, description));
+    insert(DatabaseRow.of(ownerId, id, creatorId, stepIds, stepCount,
+      connectionIds, created, name, description));
   }
 
   public void deleteProcess(UUID processId) {
@@ -94,7 +97,8 @@ public final class ProcessDatabaseTable extends DatabaseTable {
 
   public CompletableFuture<DatabasePage<Process>> findProcessesOfOwner(
     UUID ownerId, int targetPage, String sortingColumn, DatabaseOrder sortingOrder,
-    String search, UUID creatorId, long startTime, long endTime
+    String search, UUID creatorId, long startTime, long endTime, long minimumSteps,
+    long maximumSteps
   ) {
     if (!search.isEmpty()) {
       return selectRows("owner=" + ownerId + " AND name LIKE '%" + search +
@@ -103,20 +107,21 @@ public final class ProcessDatabaseTable extends DatabaseTable {
     }
     var view = findTargetView(sortingColumn);
     return view.selectPage(DatabaseCell.create(ownerId),
-        createProcessConditions(creatorId, startTime, endTime),
-        sortingOrder, PAGE_SIZE, targetPage)
+        createProcessConditions(creatorId, startTime, endTime, minimumSteps,
+          maximumSteps), sortingOrder, PAGE_SIZE, targetPage)
       .thenApply(page -> createProcessPage(page, view));
   }
 
   public CompletableFuture<DatabasePage<Process>> findProcessesOfOwner(
     UUID ownerId, String pageState, DatabaseDirection startingPoint,
     DatabaseDirection direction, String sortingColumn, DatabaseOrder sortingOrder,
-    UUID creatorId, long startTime, long endTime
+    UUID creatorId, long startTime, long endTime, long minimumSteps,
+    long maximumSteps
   ) {
     var view = findTargetView(sortingColumn);
     return view.shiftPage(DatabaseCell.create(ownerId),
-        createProcessConditions(creatorId, startTime, endTime),
-        sortingOrder, PAGE_SIZE, pageState, startingPoint, direction)
+        createProcessConditions(creatorId, startTime, endTime, minimumSteps,
+          maximumSteps), sortingOrder, PAGE_SIZE, pageState, startingPoint, direction)
       .thenApply(page -> createProcessPage(page, view));
   }
 
@@ -127,12 +132,15 @@ public final class ProcessDatabaseTable extends DatabaseTable {
       return creatorView;
     } else if (sortingColumn.equals("created")) {
       return createdView;
+    } else if (sortingColumn.equals("steps")) {
+      return stepView;
     }
     return null;
   }
 
   private List<String> createProcessConditions(
-    UUID creatorId, long startTime, long endTime
+    UUID creatorId, long startTime, long endTime, long minimumSteps,
+    long maximumSteps
   ) {
     var conditions = Lists.<String>newArrayList();
     if (creatorId != null) {
@@ -143,6 +151,12 @@ public final class ProcessDatabaseTable extends DatabaseTable {
     }
     if (endTime > 0) {
       conditions.add("created <= " + endTime);
+    }
+    if (minimumSteps > 0) {
+      conditions.add("stepCount >= " + minimumSteps);
+    }
+    if (maximumSteps > 0) {
+      conditions.add("stepCount <= " + maximumSteps);
     }
     return conditions;
   }

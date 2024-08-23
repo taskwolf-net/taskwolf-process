@@ -25,6 +25,7 @@ public final class Process {
       row.findCell(columns.indexOf("id")).uuidValue(),
       row.findCell(columns.indexOf("creator")).uuidValue(),
       row.findCell(columns.indexOf("steps")).listValue(),
+      row.findCell(columns.indexOf("stepCount")).integerValue(),
       row.findCell(columns.indexOf("connections")).listValue(),
       row.findCell(columns.indexOf("created")).longValue(),
       row.findCell(columns.indexOf("name")).stringValue(),
@@ -35,6 +36,7 @@ public final class Process {
   private final UUID id;
   private final UUID creatorId;
   private final List<UUID> stepIds;
+  private final int stepCount;
   private final List<UUID> connectionIds;
   private final long created;
   private final String name;
