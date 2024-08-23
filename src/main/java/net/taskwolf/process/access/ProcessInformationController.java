@@ -111,7 +111,7 @@ public final class ProcessInformationController extends ProcessController {
   }
 
   @RequestMapping(path = "/processes/page/shift/", method = RequestMethod.POST)
-  public CompletableFuture<Map<String, Object>> findPreviousProcessPage(
+  public CompletableFuture<Map<String, Object>> shiftProcessPage(
     HttpServletRequest request, @RequestBody String payload,
     HttpServletResponse response
   ) {
