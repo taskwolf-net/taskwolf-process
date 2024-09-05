@@ -2,6 +2,7 @@ package net.taskwolf.process.structure.step;
 
 import com.google.common.collect.Lists;
 import net.taskwolf.core.database.*;
+import net.taskwolf.core.database.condition.DatabaseCondition;
 
 import java.util.List;
 import java.util.UUID;
@@ -50,7 +51,7 @@ public final class ProcessStepDatabaseTable extends DatabaseTable {
   }
 
   public void deleteProcessStep(UUID stepId) {
-    delete(DatabaseCell.create(stepId));
+    delete(stepId);
   }
 
   public CompletableFuture<UUID> generateAvailableProcessStepId() {
@@ -63,17 +64,17 @@ public final class ProcessStepDatabaseTable extends DatabaseTable {
   }
 
   public CompletableFuture<Boolean> processStepExists(UUID stepId) {
-    return exists(DatabaseCell.create(stepId));
+    return exists(stepId);
   }
 
   public CompletableFuture<ProcessStep> findProcessStep(UUID stepId) {
-    return selectRow(DatabaseCell.create(stepId)).thenApply(ProcessStep::of);
+    return selectRow(stepId).thenApply(ProcessStep::of);
   }
 
   public CompletableFuture<List<ProcessStep>> findProcessStepsByProcess(
     UUID processId
   ) {
-    return selectRows("process=" + processId)
+    return selectRows(DatabaseCondition.of("process", processId))
       .thenApply(rows -> rows.stream().map(ProcessStep::of)
         .collect(Collectors.toList()));
   }

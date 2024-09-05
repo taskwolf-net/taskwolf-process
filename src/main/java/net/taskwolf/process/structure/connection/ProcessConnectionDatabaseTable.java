@@ -2,6 +2,7 @@ package net.taskwolf.process.structure.connection;
 
 import com.google.common.collect.Lists;
 import net.taskwolf.core.database.*;
+import net.taskwolf.core.database.condition.DatabaseCondition;
 import net.taskwolf.process.structure.step.ProcessStep;
 
 import java.util.List;
@@ -43,7 +44,7 @@ public final class ProcessConnectionDatabaseTable extends DatabaseTable {
   }
 
   public void deleteProcessConnection(UUID connectionId) {
-    delete(DatabaseCell.create(connectionId));
+    delete(connectionId);
   }
 
   public CompletableFuture<UUID> generateAvailableProcessConnectionId() {
@@ -56,18 +57,17 @@ public final class ProcessConnectionDatabaseTable extends DatabaseTable {
   }
 
   public CompletableFuture<Boolean> processConnectionExists(UUID connectionId) {
-    return exists(DatabaseCell.create(connectionId));
+    return exists(connectionId);
   }
 
   public CompletableFuture<ProcessStep> findProcessConnection(UUID connectionId) {
-    return selectRow(DatabaseCell.create(connectionId)).thenApply(ProcessStep::of);
+    return selectRow(connectionId).thenApply(ProcessStep::of);
   }
-
 
   public CompletableFuture<List<ProcessConnection>> findProcessConnectionsByProcess(
     UUID processId
   ) {
-    return selectRows("process=" + processId)
+    return selectRows(DatabaseCondition.of("process", processId))
       .thenApply(rows -> rows.stream().map(ProcessConnection::of)
         .collect(Collectors.toList()));
   }

@@ -5,6 +5,7 @@ import com.google.common.collect.Maps;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import net.taskwolf.core.database.*;
+import net.taskwolf.core.database.condition.DatabaseCondition;
 import net.taskwolf.core.trigger.Trigger;
 import net.taskwolf.core.trigger.TriggerContentDatabaseTable;
 import net.taskwolf.core.trigger.TriggerInformation;
@@ -55,7 +56,7 @@ public final class ProcessTrigger implements Trigger {
   }
 
   @Override
-  public CompletableFuture<List<UUID>> findEntries(String condition) {
+  public CompletableFuture<List<UUID>> findEntries(DatabaseCondition condition) {
     return contentDatabaseTable.findContentByCondition(condition).thenApply(
       rows -> rows.stream().map(row -> row.findCell(0).uuidValue()).toList());
   }

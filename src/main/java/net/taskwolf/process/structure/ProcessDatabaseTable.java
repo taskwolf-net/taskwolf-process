@@ -2,6 +2,11 @@ package net.taskwolf.process.structure;
 
 import com.google.common.collect.Lists;
 import net.taskwolf.core.database.*;
+import net.taskwolf.core.database.condition.DatabaseComparison;
+import net.taskwolf.core.database.condition.DatabaseCondition;
+import net.taskwolf.core.database.paging.DatabaseDirection;
+import net.taskwolf.core.database.paging.DatabaseOrder;
+import net.taskwolf.core.database.paging.DatabasePage;
 
 import java.util.List;
 import java.util.UUID;
@@ -72,7 +77,7 @@ public final class ProcessDatabaseTable extends DatabaseTable {
 
   public void deleteProcess(UUID processId) {
     findProcess(processId).thenAccept(process ->
-      delete("owner=" + process.ownerId() + " AND id=" + process.id()));
+      delete(DatabaseCondition.of("owner", process.ownerId(), "id", process.id())));
   }
 
   public CompletableFuture<UUID> generateAvailableProcessId() {
@@ -85,12 +90,12 @@ public final class ProcessDatabaseTable extends DatabaseTable {
   }
 
   public CompletableFuture<Boolean> processExists(UUID processId) {
-    return exists("id=" + processId);
+    return exists(DatabaseCondition.of("id", processId));
   }
 
   public CompletableFuture<Process> findProcess(UUID processId) {
-    return selectRow("id=" + processId).thenApply(row ->
-      Process.of(row, this));
+    return selectRow(DatabaseCondition.of("id", processId))
+      .thenApply(row -> Process.of(row, this));
   }
 
   private static final int PAGE_SIZE = 5;
@@ -101,14 +106,15 @@ public final class ProcessDatabaseTable extends DatabaseTable {
     long maximumSteps
   ) {
     if (!search.isEmpty()) {
-      return selectRows("owner=" + ownerId + " AND name LIKE '%" + search +
-        "%' LIMIT " + PAGE_SIZE)
+      var condition = DatabaseCondition.of(DatabaseComparison.create("owner", ownerId),
+        DatabaseComparison.create("name", "%" + search + "%", DatabaseComparison.Type.LIKE));
+      return selectRows(condition, PAGE_SIZE)
         .thenApply(rows -> createProcessPage(DatabasePage.create(rows, "", 1), this));
     }
     var view = findTargetView(sortingColumn);
-    return view.selectPage(DatabaseCell.create(ownerId),
-        createProcessConditions(creatorId, startTime, endTime, minimumSteps,
-          maximumSteps), sortingOrder, PAGE_SIZE, targetPage)
+    return view.selectPage(ownerId, createProcessConditions(creatorId, startTime,
+          endTime, minimumSteps, maximumSteps),
+        sortingOrder, PAGE_SIZE, targetPage)
       .thenApply(page -> createProcessPage(page, view));
   }
 
@@ -119,9 +125,9 @@ public final class ProcessDatabaseTable extends DatabaseTable {
     long maximumSteps
   ) {
     var view = findTargetView(sortingColumn);
-    return view.shiftPage(DatabaseCell.create(ownerId),
-        createProcessConditions(creatorId, startTime, endTime, minimumSteps,
-          maximumSteps), sortingOrder, PAGE_SIZE, pageState, startingPoint, direction)
+    return view.shiftPage(ownerId, createProcessConditions(creatorId, startTime,
+          endTime, minimumSteps, maximumSteps),
+        sortingOrder, PAGE_SIZE, pageState, startingPoint, direction)
       .thenApply(page -> createProcessPage(page, view));
   }
 
@@ -138,27 +144,31 @@ public final class ProcessDatabaseTable extends DatabaseTable {
     return null;
   }
 
-  private List<String> createProcessConditions(
+  private DatabaseCondition createProcessConditions(
     UUID creatorId, long startTime, long endTime, long minimumSteps,
     long maximumSteps
   ) {
-    var conditions = Lists.<String>newArrayList();
+    var comparisons = Lists.<DatabaseComparison>newArrayList();
     if (creatorId != null) {
-      conditions.add("creator = " + creatorId);
+      comparisons.add(DatabaseComparison.create("creator", creatorId));
     }
     if (startTime > 0) {
-      conditions.add("created >= " + startTime);
+      comparisons.add(DatabaseComparison.create("created", startTime,
+        DatabaseComparison.Type.GREATER_EQUALS));
     }
     if (endTime > 0) {
-      conditions.add("created <= " + endTime);
+      comparisons.add(DatabaseComparison.create("created", endTime,
+        DatabaseComparison.Type.SMALLER_EQUALS));
     }
     if (minimumSteps > 0) {
-      conditions.add("stepCount >= " + minimumSteps);
+      comparisons.add(DatabaseComparison.create("stepCount", minimumSteps,
+        DatabaseComparison.Type.GREATER_EQUALS));
     }
     if (maximumSteps > 0) {
-      conditions.add("stepCount <= " + maximumSteps);
+      comparisons.add(DatabaseComparison.create("stepCount", maximumSteps,
+        DatabaseComparison.Type.SMALLER_EQUALS));
     }
-    return conditions;
+    return DatabaseCondition.create(comparisons);
   }
 
   private DatabasePage<Process> createProcessPage(
@@ -170,13 +180,13 @@ public final class ProcessDatabaseTable extends DatabaseTable {
   }
 
   public CompletableFuture<Long> findProcessCount(UUID ownerId) {
-    return count("owner=" + ownerId);
+    return count(DatabaseCondition.of("owner", ownerId));
   }
 
   public CompletableFuture<List<Process>> findAllProcessesOfOwner(
     UUID ownerId
   ) {
-    return selectRows("owner=" + ownerId).thenApply(rows ->
+    return selectRows(DatabaseCondition.of("owner", ownerId)).thenApply(rows ->
       rows.stream().map(row -> Process.of(row, this)).toList());
   }
 }
