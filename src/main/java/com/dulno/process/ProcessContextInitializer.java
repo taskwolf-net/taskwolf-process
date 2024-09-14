@@ -1,12 +1,12 @@
-package net.taskwolf.process;
+package com.dulno.process;
 
+import com.dulno.process.structure.ProcessDatabaseTable;
+import com.dulno.process.structure.connection.ProcessConnectionDatabaseTable;
+import com.dulno.process.structure.step.ProcessStepDatabaseTable;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
-import net.taskwolf.process.structure.ProcessDatabaseTable;
-import net.taskwolf.process.structure.connection.ProcessConnectionDatabaseTable;
-import net.taskwolf.process.structure.step.ProcessStepDatabaseTable;
 import org.springframework.context.ApplicationContextInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
 

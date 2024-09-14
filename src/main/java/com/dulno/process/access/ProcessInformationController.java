@@ -1,26 +1,26 @@
-package net.taskwolf.process.access;
+package com.dulno.process.access;
 
+import com.dulno.process.structure.step.ProcessStepDatabaseTable;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import net.taskwolf.core.access.TaskwolfRequestBody;
-import net.taskwolf.core.database.paging.DatabaseDirection;
-import net.taskwolf.core.database.paging.DatabaseOrder;
-import net.taskwolf.core.database.paging.DatabasePage;
-import net.taskwolf.core.iterator.AsyncIterator;
-import net.taskwolf.core.organization.team.TeamTargetDatabaseTable;
-import net.taskwolf.core.user.User;
-import net.taskwolf.core.user.UserDatabaseTable;
-import net.taskwolf.core.user.UserTargetDatabaseTable;
-import net.taskwolf.core.workflow.WorkflowDatabaseTable;
-import net.taskwolf.core.workflow.WorkflowEntry;
-import net.taskwolf.process.structure.Process;
-import net.taskwolf.process.structure.ProcessDatabaseTable;
-import net.taskwolf.process.structure.connection.ProcessConnection;
-import net.taskwolf.process.structure.connection.ProcessConnectionDatabaseTable;
-import net.taskwolf.process.structure.step.ProcessStep;
-import net.taskwolf.process.structure.step.ProcessStepDatabaseTable;
+import com.dulno.core.access.DulnoRequestBody;
+import com.dulno.core.database.paging.DatabaseDirection;
+import com.dulno.core.database.paging.DatabaseOrder;
+import com.dulno.core.database.paging.DatabasePage;
+import com.dulno.core.iterator.AsyncIterator;
+import com.dulno.core.organization.team.TeamTargetDatabaseTable;
+import com.dulno.core.user.User;
+import com.dulno.core.user.UserDatabaseTable;
+import com.dulno.core.user.UserTargetDatabaseTable;
+import com.dulno.core.workflow.WorkflowDatabaseTable;
+import com.dulno.core.workflow.WorkflowEntry;
+import com.dulno.process.structure.Process;
+import com.dulno.process.structure.ProcessDatabaseTable;
+import com.dulno.process.structure.connection.ProcessConnection;
+import com.dulno.process.structure.connection.ProcessConnectionDatabaseTable;
+import com.dulno.process.structure.step.ProcessStep;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -82,7 +82,7 @@ public final class ProcessInformationController extends ProcessController {
     HttpServletRequest request, @RequestBody String payload,
     HttpServletResponse response
   ) {
-    var body = TaskwolfRequestBody.of(payload, response);
+    var body = DulnoRequestBody.of(payload, response);
     var futureResponse = new CompletableFuture<Map<String, Object>>();
     findUser(request).thenAccept(user -> performProcessOperation(user,
       body.getUUID("process"), process -> gatherProcessInformation(process)
@@ -96,7 +96,7 @@ public final class ProcessInformationController extends ProcessController {
     HttpServletRequest request, @RequestBody String payload,
     HttpServletResponse response
   ) {
-    var body = TaskwolfRequestBody.of(payload, response);
+    var body = DulnoRequestBody.of(payload, response);
     var targetPage = body.getInt("targetPage");
     var sortingColumn = body.getString("sorting");
     var sortingOrder = DatabaseOrder.valueOf(body.getString("order"));
@@ -118,7 +118,7 @@ public final class ProcessInformationController extends ProcessController {
     HttpServletRequest request, @RequestBody String payload,
     HttpServletResponse response
   ) {
-    var body = TaskwolfRequestBody.of(payload, response);
+    var body = DulnoRequestBody.of(payload, response);
     var pageState = body.getString("pageState");
     var startingPoint = DatabaseDirection.valueOf(body.getString("startingPoint"));
     var direction = DatabaseDirection.valueOf(body.getString("direction"));

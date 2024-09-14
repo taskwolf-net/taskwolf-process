@@ -1,13 +1,11 @@
-package net.taskwolf.process.structure;
+package com.dulno.process.structure;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
-import net.taskwolf.core.database.DatabaseColumn;
-import net.taskwolf.core.database.DatabaseRow;
-import net.taskwolf.core.database.DatabaseTable;
-import net.taskwolf.core.workflow.WorkflowEntry;
-import net.taskwolf.core.workflow.WorkflowState;
+import com.dulno.core.database.DatabaseColumn;
+import com.dulno.core.database.DatabaseRow;
+import com.dulno.core.database.DatabaseTable;
 
 import java.util.List;
 import java.util.UUID;

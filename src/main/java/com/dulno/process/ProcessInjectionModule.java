@@ -1,14 +1,14 @@
-package net.taskwolf.process;
+package com.dulno.process;
 
+import com.dulno.process.structure.ProcessDatabaseTable;
+import com.dulno.process.structure.connection.ProcessConnectionDatabaseTable;
+import com.dulno.process.structure.step.ProcessStepDatabaseTable;
 import com.google.inject.AbstractModule;
 import com.google.inject.Provides;
 import com.google.inject.Singleton;
 import lombok.RequiredArgsConstructor;
-import net.taskwolf.core.database.DatabaseConnection;
-import net.taskwolf.core.database.DatabaseKeyspace;
-import net.taskwolf.process.structure.ProcessDatabaseTable;
-import net.taskwolf.process.structure.connection.ProcessConnectionDatabaseTable;
-import net.taskwolf.process.structure.step.ProcessStepDatabaseTable;
+import com.dulno.core.database.DatabaseConnection;
+import com.dulno.core.database.DatabaseKeyspace;
 
 @RequiredArgsConstructor(staticName = "create")
 public class ProcessInjectionModule extends AbstractModule {

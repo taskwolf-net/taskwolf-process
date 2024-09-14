@@ -1,14 +1,14 @@
-package net.taskwolf.process.trigger;
+package com.dulno.process.trigger;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
-import net.taskwolf.core.database.*;
-import net.taskwolf.core.database.condition.DatabaseCondition;
-import net.taskwolf.core.trigger.Trigger;
-import net.taskwolf.core.trigger.TriggerContentDatabaseTable;
-import net.taskwolf.core.trigger.TriggerInformation;
+import com.dulno.core.database.*;
+import com.dulno.core.database.condition.DatabaseCondition;
+import com.dulno.core.trigger.Trigger;
+import com.dulno.core.trigger.TriggerContentDatabaseTable;
+import com.dulno.core.trigger.TriggerInformation;
 
 import java.util.List;
 import java.util.Map;
