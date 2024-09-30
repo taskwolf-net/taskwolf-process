@@ -1,5 +1,6 @@
 package com.dulno.process;
 
+import com.dulno.core.account.AccountLinkEntry;
 import com.google.common.collect.Lists;
 import lombok.RequiredArgsConstructor;
 import com.dulno.core.account.AccountLink;
@@ -16,7 +17,7 @@ public final class ProcessAccountLink implements AccountLink {
   }
 
   @Override
-  public CompletableFuture<List<String>> findAccounts(UUID userId) {
+  public CompletableFuture<List<AccountLinkEntry>> findAccounts(UUID userId) {
     return CompletableFuture.completedFuture(Lists.newArrayList());
   }
 
