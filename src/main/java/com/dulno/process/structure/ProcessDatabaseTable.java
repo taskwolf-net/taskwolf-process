@@ -61,22 +61,22 @@ public final class ProcessDatabaseTable extends DatabaseTable {
     stepView = createMaterializedViewIfNotExists("step_view", "stepCount");
   }
 
-  public void insertProcess(Process process) {
-    insertProcess(process.ownerId(), process.id(), process.creatorId(),
+  public CompletableFuture<Void> insertProcess(Process process) {
+    return insertProcess(process.ownerId(), process.id(), process.creatorId(),
       process.stepIds(), process.stepCount(), process.connectionIds(),
       process.created(), process.name(), process.description());
   }
 
-  public void insertProcess(
+  public CompletableFuture<Void> insertProcess(
     UUID ownerId, UUID id, UUID creatorId, List<UUID> stepIds, int stepCount,
     List<UUID> connectionIds, long created, String name, String description
   ) {
-    insert(DatabaseRow.of(ownerId, id, creatorId, stepIds, stepCount,
+    return insert(DatabaseRow.of(ownerId, id, creatorId, stepIds, stepCount,
       connectionIds, created, name, description));
   }
 
-  public void deleteProcess(UUID processId) {
-    findProcess(processId).thenAccept(process ->
+  public CompletableFuture<Void> deleteProcess(UUID processId) {
+    return findProcess(processId).thenAccept(process ->
       delete(DatabaseCondition.of("owner", process.ownerId(), "id", process.id())));
   }
 

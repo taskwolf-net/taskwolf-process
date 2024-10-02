@@ -74,7 +74,7 @@ public final class ProcessModificationController extends ProcessController {
         .thenCompose(success -> success ?
           userTargetDatabaseTable().findTargetSecured(user.id()).thenCompose(target ->
             findProcessOwner(user, target).thenCompose(owner ->
-              checkProcessNumberLimit(user, target).thenAccept(limitReached ->
+              checkProcessNumberLimit(user, target).thenCompose(limitReached ->
                 addProcess(user, owner, steps, connections, created,
                   name, description, limitReached, response)))) : null));
   }
@@ -104,21 +104,21 @@ public final class ProcessModificationController extends ProcessController {
           Stream.of(target)).toList());
   }
 
-  private void addProcess(
+  private CompletableFuture<Void> addProcess(
     User creator, UUID ownerId, List<DulnoRequestBody> stepData,
     List<DulnoRequestBody> connectionData, long created, String name,
     String description, boolean limitReached, HttpServletResponse response
   ) {
     if (limitReached) {
       response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-      return;
+      return CompletableFuture.completedFuture(null);
     }
-    createProcess(creator, ownerId, stepData, connectionData, created, name,
-      description);
+    return createProcess(creator, ownerId, stepData, connectionData, created,
+      name, description);
   }
 
   @RequestMapping(path = "/process/update/", method = RequestMethod.POST)
-  public void updateProcess(
+  public CompletableFuture<Void> updateProcess(
     HttpServletRequest request, @RequestBody String payload,
     HttpServletResponse response
   ) {
@@ -128,11 +128,11 @@ public final class ProcessModificationController extends ProcessController {
     var description = body.getString("description");
     var steps = body.getObjectList("steps");
     var connections = body.getObjectList("connections");
-    findUser(request).thenAccept(user ->
+    return findUser(request).thenCompose(user ->
       checkProcessIntegrity(user, name, description, steps, connections)
-        .thenApply(success -> success ? processDatabaseTable().findProcess(processId)
-          .thenAccept(process -> checkProcessAuthorization(user, process)
-            .thenAccept(authorized -> updateProcess(process, authorized, steps,
+        .thenCompose(success -> success ? processDatabaseTable().findProcess(processId)
+          .thenCompose(process -> checkProcessAuthorization(user, process)
+            .thenCompose(authorized -> updateProcess(process, authorized, steps,
               connections, name, description))) : null));
   }
 
@@ -207,37 +207,37 @@ public final class ProcessModificationController extends ProcessController {
       .thenCompose(workflow -> checkWorkflowAuthorization(user, workflow.ownerId()));
   }
 
-  private void updateProcess(
+  private CompletableFuture<Void> updateProcess(
     Process process, boolean authorized, List<DulnoRequestBody> stepData,
     List<DulnoRequestBody> connectionData, String name, String description
   ) {
     if (!authorized) {
-      return;
+      return CompletableFuture.completedFuture(null);
     }
-    deleteProcess(process);
-    userDatabaseTable().findUser(process.creatorId()).thenAccept(creator ->
-      processDatabaseTable().generateAvailableProcessId().thenAccept(processId ->
-        createProcess(processId, creator, process.ownerId(), stepData,
-          connectionData, process.created(), name, description)));
+    return deleteProcess(process).thenCompose(value ->
+      userDatabaseTable().findUser(process.creatorId()).thenCompose(creator ->
+        processDatabaseTable().generateAvailableProcessId().thenCompose(processId ->
+          createProcess(processId, creator, process.ownerId(), stepData,
+            connectionData, process.created(), name, description))));
   }
 
-  private void createProcess(
+  private CompletableFuture<Void> createProcess(
     User creator, UUID ownerId, List<DulnoRequestBody> stepData,
     List<DulnoRequestBody> connectionData, long created, String name,
     String description
   ) {
-    processDatabaseTable().generateAvailableProcessId().thenAccept(processId ->
-      createProcess(processId, creator, ownerId, stepData, connectionData,
-        created, name, description));
+    return processDatabaseTable().generateAvailableProcessId()
+      .thenCompose(processId -> createProcess(processId, creator, ownerId,
+        stepData, connectionData, created, name, description));
   }
 
-  private void createProcess(
+  private CompletableFuture<Void> createProcess(
     UUID processId, User creator, UUID ownerId,
     List<DulnoRequestBody> stepData, List<DulnoRequestBody> connectionData,
     long created, String name, String description
   ) {
-    generateStepIds(stepData.size()).thenAccept(stepIds ->
-      generateConnectionIds(connectionData.size()).thenAccept(connectionIds ->
+    return generateStepIds(stepData.size()).thenCompose(stepIds ->
+      generateConnectionIds(connectionData.size()).thenCompose(connectionIds ->
         createProcess(processId, creator.id(), ownerId, stepIds, stepData,
           connectionIds, connectionData, created, name, description)));
   }
@@ -273,7 +273,7 @@ public final class ProcessModificationController extends ProcessController {
     return futureResponse;
   }
 
-  private void createProcess(
+  private CompletableFuture<Void> createProcess(
     UUID processId, UUID creatorId, UUID ownerId, List<UUID> stepIds,
     List<DulnoRequestBody> stepData, List<UUID> connectionIds,
     List<DulnoRequestBody> connectionData, long created, String name,
@@ -286,7 +286,7 @@ public final class ProcessModificationController extends ProcessController {
       createConnection(connectionIds.get(i), processId, connectionData.get(i),
         stepIds);
     }
-    processDatabaseTable().insertProcess(ownerId, processId, creatorId,
+    return processDatabaseTable().insertProcess(ownerId, processId, creatorId,
       stepIds, stepIds.size(), connectionIds, created, name, description);
   }
 
@@ -362,22 +362,25 @@ public final class ProcessModificationController extends ProcessController {
   }
 
   @RequestMapping(path = "/process/remove/", method = RequestMethod.POST)
-  public void removeProcess(
+  public CompletableFuture<Void> removeProcess(
     HttpServletRequest request, @RequestBody String payload,
     HttpServletResponse response
   ) {
     var body = DulnoRequestBody.of(payload, response);
+    var futureResponse = new CompletableFuture<Void>();
     performProcessOperation(findUserId(request), body.getUUID("process"),
-      this::deleteProcess, () -> {});
+      process -> deleteProcess(process).thenAccept(futureResponse::complete),
+      () -> futureResponse.complete(null));
+    return futureResponse;
   }
 
-  public void deleteProcess(Process process) {
-    processDatabaseTable().deleteProcess(process.id());
+  public CompletableFuture<Void> deleteProcess(Process process) {
     for (var step : process.stepIds()) {
       processStepDatabaseTable().deleteProcessStep(step);
     }
     for (var connection : process.connectionIds()) {
       processConnectionDatabaseTable().deleteProcessConnection(connection);
     }
+    return processDatabaseTable().deleteProcess(process.id());
   }
 }
