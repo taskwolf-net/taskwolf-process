@@ -65,8 +65,8 @@ public final class ProcessModificationController extends ProcessController {
   ) {
     var body = DulnoRequestBody.of(payload, response);
     var created = System.currentTimeMillis();
-    var name = body.getString("name");
-    var description = body.getString("description");
+    var name = body.getString("name", 64);
+    var description = body.getString("description", 128);
     var steps = body.getObjectList("steps");
     var connections = body.getObjectList("connections");
     return findUser(request).thenCompose(user ->
@@ -124,8 +124,8 @@ public final class ProcessModificationController extends ProcessController {
   ) {
     var body = DulnoRequestBody.of(payload, response);
     var processId = body.getUUID("process");
-    var name = body.getString("name");
-    var description = body.getString("description");
+    var name = body.getString("name", 64);
+    var description = body.getString("description", 128);
     var steps = body.getObjectList("steps");
     var connections = body.getObjectList("connections");
     return findUser(request).thenCompose(user ->
