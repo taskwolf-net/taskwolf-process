@@ -54,10 +54,10 @@ dependencies {
 
   compileOnly("com.google.guava:guava:33.1.0-jre")
 
-  compileOnly("org.projectlombok:lombok:1.18.32")
-  annotationProcessor("org.projectlombok:lombok:1.18.32")
-  testCompileOnly("org.projectlombok:lombok:1.18.32")
-  testAnnotationProcessor("org.projectlombok:lombok:1.18.32")
+  compileOnly("org.projectlombok:lombok:1.18.36")
+  annotationProcessor("org.projectlombok:lombok:1.18.36")
+  testCompileOnly("org.projectlombok:lombok:1.18.36")
+  testAnnotationProcessor("org.projectlombok:lombok:1.18.36")
 
   compileOnly("org.json:json:20240303")
   compileOnly("commons-io:commons-io:2.16.1")
