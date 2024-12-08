@@ -60,7 +60,7 @@ dependencies {
   testAnnotationProcessor("org.projectlombok:lombok:1.18.32")
 
   compileOnly("org.json:json:20240303")
-  compileOnly("commons-io:commons-io:2.16.1")
+  compileOnly("commons-io:commons-io:2.18.0")
 
   compileOnly("org.springframework.boot:spring-boot-starter-web:3.2.5")
 }
