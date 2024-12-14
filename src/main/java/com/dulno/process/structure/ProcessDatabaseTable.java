@@ -102,8 +102,8 @@ public final class ProcessDatabaseTable extends DatabaseTable {
 
   public CompletableFuture<DatabasePage<Process>> findProcessesOfOwner(
     UUID ownerId, int targetPage, String sortingColumn, DatabaseOrder sortingOrder,
-    String search, UUID creatorId, long startTime, long endTime, long minimumSteps,
-    long maximumSteps
+    String search, UUID creatorId, long startTime, long endTime, int minimumSteps,
+    int maximumSteps
   ) {
     if (!search.isEmpty()) {
       var condition = DatabaseCondition.of(DatabaseComparison.create("owner", ownerId),
@@ -121,8 +121,8 @@ public final class ProcessDatabaseTable extends DatabaseTable {
   public CompletableFuture<DatabasePage<Process>> findProcessesOfOwner(
     UUID ownerId, String pageState, DatabaseDirection startingPoint,
     DatabaseDirection direction, String sortingColumn, DatabaseOrder sortingOrder,
-    UUID creatorId, long startTime, long endTime, long minimumSteps,
-    long maximumSteps
+    UUID creatorId, long startTime, long endTime, int minimumSteps,
+    int maximumSteps
   ) {
     var view = findTargetView(sortingColumn);
     return view.shiftPage(ownerId, createProcessConditions(creatorId, startTime,
@@ -145,8 +145,8 @@ public final class ProcessDatabaseTable extends DatabaseTable {
   }
 
   private DatabaseCondition createProcessConditions(
-    UUID creatorId, long startTime, long endTime, long minimumSteps,
-    long maximumSteps
+    UUID creatorId, long startTime, long endTime, int minimumSteps,
+    int maximumSteps
   ) {
     var comparisons = Lists.<DatabaseComparison>newArrayList();
     if (creatorId != null) {

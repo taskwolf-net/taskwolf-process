@@ -104,8 +104,8 @@ public final class ProcessInformationController extends ProcessController {
     var creatorId = body.has("creator") ? body.getUUID("creator") : null;
     var startTime = body.has("startTime") ? body.getLong("startTime") : -1;
     var endTime = body.has("endTime") ? body.getLong("endTime") : -1;
-    var minimumUsages = body.has("minimumSteps") ? body.getLong("minimumSteps") : -1;
-    var maximumUsages = body.has("maximumSteps") ? body.getLong("maximumSteps") : -1;
+    var minimumUsages = body.has("minimumSteps") ? body.getInt("minimumSteps") : -1;
+    var maximumUsages = body.has("maximumSteps") ? body.getInt("maximumSteps") : -1;
     return findProcessTarget(findUserId(request)).thenCompose(target ->
       processDatabaseTable().findProcessesOfOwner(target, targetPage,
           sortingColumn, sortingOrder, search, creatorId, startTime, endTime,
@@ -127,8 +127,8 @@ public final class ProcessInformationController extends ProcessController {
     var creatorId = body.has("creator") ? body.getUUID("creator") : null;
     var startTime = body.has("startTime") ? body.getLong("startTime") : -1;
     var endTime = body.has("endTime") ? body.getLong("endTime") : -1;
-    var minimumUsages = body.has("minimumSteps") ? body.getLong("minimumSteps") : -1;
-    var maximumUsages = body.has("maximumSteps") ? body.getLong("maximumSteps") : -1;
+    var minimumUsages = body.has("minimumSteps") ? body.getInt("minimumSteps") : -1;
+    var maximumUsages = body.has("maximumSteps") ? body.getInt("maximumSteps") : -1;
     return findProcessTarget(findUserId(request)).thenCompose(target ->
       processDatabaseTable().findProcessesOfOwner(target, pageState,
           startingPoint, direction, sortingColumn, sortingOrder, creatorId,
