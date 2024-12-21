@@ -1,4 +1,4 @@
-image: gradle:8.11-jdk21
+image: gradle:8.12-jdk21
 
 before_script:
   - export TASKWOLF_GITLAB_PRIVATE_TOKEN="$TASKWOLF_GITLAB_PRIVATE_TOKEN"
