@@ -5,7 +5,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import com.dulno.core.CoreModule;
+import com.dulno.workflow.WorkflowModule;
 import com.dulno.core.access.DulnoRequestBody;
 import com.dulno.core.bundle.BundleDatabaseTable;
 import com.dulno.core.iterator.AsyncIterator;
@@ -15,8 +15,8 @@ import com.dulno.core.organization.team.TeamTargetDatabaseTable;
 import com.dulno.core.user.User;
 import com.dulno.core.user.UserDatabaseTable;
 import com.dulno.core.user.UserTargetDatabaseTable;
-import com.dulno.core.workflow.WorkflowDatabaseTable;
-import com.dulno.core.workflow.WorkflowEntry;
+import com.dulno.workflow.structure.WorkflowDatabaseTable;
+import com.dulno.workflow.structure.WorkflowEntry;
 import com.dulno.process.structure.Process;
 import com.dulno.process.structure.ProcessDatabaseTable;
 import com.dulno.process.structure.connection.ProcessConnectionDatabaseTable;
@@ -37,7 +37,7 @@ public final class ProcessModificationController extends ProcessController {
   private final BundleDatabaseTable bundleDatabaseTable;
   private final TeamDatabaseTable teamDatabaseTable;
   private final WorkflowDatabaseTable workflowDatabaseTable;
-  private final CoreModule coreModule;
+  private final WorkflowModule workflowModule;
 
   private ProcessModificationController(
     Key secretKey, UserDatabaseTable userDatabaseTable,
@@ -47,7 +47,7 @@ public final class ProcessModificationController extends ProcessController {
     UserTargetDatabaseTable userTargetDatabaseTable,
     TeamTargetDatabaseTable teamTargetDatabaseTable,
     BundleDatabaseTable bundleDatabaseTable, TeamDatabaseTable teamDatabaseTable,
-    WorkflowDatabaseTable workflowDatabaseTable, CoreModule coreModule
+    WorkflowDatabaseTable workflowDatabaseTable, WorkflowModule workflowModule
   ) {
     super(secretKey, userDatabaseTable, processDatabaseTable,
       processStepDatabaseTable, processConnectionDatabaseTable,
@@ -55,7 +55,7 @@ public final class ProcessModificationController extends ProcessController {
     this.bundleDatabaseTable = bundleDatabaseTable;
     this.teamDatabaseTable = teamDatabaseTable;
     this.workflowDatabaseTable = workflowDatabaseTable;
-    this.coreModule = coreModule;
+    this.workflowModule = workflowModule;
   }
 
   @RequestMapping(path = "/process/add/", method = RequestMethod.POST)
@@ -344,7 +344,7 @@ public final class ProcessModificationController extends ProcessController {
   }
 
   private void executeProcessStepWorkflow(WorkflowEntry workflowEntry) {
-    coreModule.createWorkflow(workflowEntry).thenAccept(workflow ->
+    workflowModule.createWorkflow(workflowEntry).thenAccept(workflow ->
       workflow.trigger(Maps.newHashMap()));
   }
 

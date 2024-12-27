@@ -1,9 +1,10 @@
 package com.dulno.process;
 
+import com.dulno.workflow.integration.Integration;
 import com.google.common.collect.Lists;
 import com.google.inject.Injector;
 import com.dulno.core.account.AccountLink;
-import com.dulno.core.action.ActionRepository;
+import com.dulno.workflow.action.ActionRepository;
 import com.dulno.core.database.DatabaseConnection;
 import com.dulno.core.database.DatabaseKeyspace;
 import com.dulno.core.log.Log;
@@ -11,13 +12,13 @@ import com.dulno.core.module.Module;
 import com.dulno.core.module.ModuleDescription;
 import com.dulno.core.module.ModuleInformation;
 import com.dulno.core.module.ModuleLoadPriority;
-import com.dulno.core.trigger.TriggerRepository;
+import com.dulno.workflow.trigger.TriggerRepository;
 import com.dulno.process.trigger.ProcessTrigger;
 import org.springframework.boot.SpringApplication;
 
 @ModuleDescription(name = "process", version = "1.0.0-SNAPSHOT",
   priority = ModuleLoadPriority.NEUTRAL)
-public final class ProcessModule extends Module {
+public final class ProcessModule extends Integration {
   private Log log;
   private SpringApplication springApplication;
   private ProcessContextInitializer contextInitializer;
