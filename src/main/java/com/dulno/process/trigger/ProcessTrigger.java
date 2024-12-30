@@ -45,7 +45,9 @@ public final class ProcessTrigger implements Trigger {
   }
 
   @Override
-  public CompletableFuture<Void> insert(UUID triggerId, Map<String, Object> content) {
+  public CompletableFuture<Void> insert(
+    UUID triggerId, UUID ownerId, Map<String, Object> content
+  ) {
     return contentDatabaseTable.insertContent(triggerId, DatabaseRow.of());
   }
 
