@@ -70,7 +70,7 @@ public final class ProcessModificationController extends ProcessController {
     var steps = body.getObjectList("steps");
     var connections = body.getObjectList("connections");
     return findUser(request).thenCompose(user ->
-      checkProcessIntegrity(user, name, description, steps, connections)
+      checkProcessIntegrity(user, name, steps, connections)
         .thenCompose(success -> success ?
           userTargetDatabaseTable().findTargetSecured(user.id()).thenCompose(target ->
             findProcessOwner(user, target).thenCompose(owner ->
@@ -129,7 +129,7 @@ public final class ProcessModificationController extends ProcessController {
     var steps = body.getObjectList("steps");
     var connections = body.getObjectList("connections");
     return findUser(request).thenCompose(user ->
-      checkProcessIntegrity(user, name, description, steps, connections)
+      checkProcessIntegrity(user, name, steps, connections)
         .thenCompose(success -> success ? processDatabaseTable().findProcess(processId)
           .thenCompose(process -> checkProcessAuthorization(user, process)
             .thenCompose(authorized -> updateProcess(process, authorized, steps,
@@ -137,10 +137,10 @@ public final class ProcessModificationController extends ProcessController {
   }
 
   private CompletableFuture<Boolean> checkProcessIntegrity(
-    User user, String name, String description, List<DulnoRequestBody> stepData,
+    User user, String name, List<DulnoRequestBody> stepData,
     List<DulnoRequestBody> connectionData
   ) {
-    if (name.equals("") || description.equals("")) {
+    if (name.isEmpty()) {
       return CompletableFuture.completedFuture(false);
     }
     if (!checkProcessCompleteness(stepData, connectionData)) {
