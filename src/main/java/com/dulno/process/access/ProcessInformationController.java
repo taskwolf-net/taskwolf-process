@@ -1,6 +1,9 @@
 package com.dulno.process.access;
 
 import com.dulno.process.structure.step.ProcessStepDatabaseTable;
+import com.dulno.workflow.sub.trigger.SubWorkflowTrigger;
+import com.dulno.workflow.trigger.TriggerDatabaseTable;
+import com.dulno.workflow.trigger.TriggerEntry;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,6 +24,7 @@ import com.dulno.process.structure.ProcessDatabaseTable;
 import com.dulno.process.structure.connection.ProcessConnection;
 import com.dulno.process.structure.connection.ProcessConnectionDatabaseTable;
 import com.dulno.process.structure.step.ProcessStep;
+import org.json.JSONArray;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -34,6 +38,8 @@ import java.util.concurrent.CompletableFuture;
 @RestController
 public final class ProcessInformationController extends ProcessController {
   private final WorkflowDatabaseTable workflowDatabaseTable;
+  private final TriggerDatabaseTable triggerDatabaseTable;
+  private final SubWorkflowTrigger subWorkflowTrigger;
   private final SimpleDateFormat simpleDateFormat = new SimpleDateFormat("dd.MM.yyyy");
 
   private ProcessInformationController(
@@ -43,12 +49,16 @@ public final class ProcessInformationController extends ProcessController {
     ProcessConnectionDatabaseTable processConnectionDatabaseTable,
     UserTargetDatabaseTable userTargetDatabaseTable,
     TeamTargetDatabaseTable teamTargetDatabaseTable,
-    WorkflowDatabaseTable workflowDatabaseTable
+    WorkflowDatabaseTable workflowDatabaseTable,
+    TriggerDatabaseTable triggerDatabaseTable,
+    SubWorkflowTrigger subWorkflowTrigger
   ) {
     super(secretKey, userDatabaseTable, processDatabaseTable,
       processStepDatabaseTable, processConnectionDatabaseTable,
       userTargetDatabaseTable, teamTargetDatabaseTable);
     this.workflowDatabaseTable = workflowDatabaseTable;
+    this.triggerDatabaseTable = triggerDatabaseTable;
+    this.subWorkflowTrigger = subWorkflowTrigger;
   }
 
   @RequestMapping(path = "/process/workflows/", method = RequestMethod.GET)
@@ -62,9 +72,13 @@ public final class ProcessInformationController extends ProcessController {
   }
 
   private CompletableFuture<Map<String, Object>> findProcessWorkflows(UUID owner) {
-    return workflowDatabaseTable.findWorkflowByModule(owner, "process")
-      .thenApply(workflows -> Map.of("workflows", workflows.stream().map(
-        workflow -> Map.of("id", workflow.id(), "name", workflow.name())).toList()));
+    return triggerDatabaseTable.findTriggerByOwnerAndType(owner,
+        "sub-workflow-trigger")
+      .thenCompose(triggers -> AsyncIterator.execute(triggers,
+          trigger -> workflowDatabaseTable.findWorkflow(trigger.workflowId()))
+        .thenApply(workflows -> Map.of("workflows", workflows.stream()
+          .map(workflow -> Map.of("id", workflow.id(), "name", workflow.name()))
+          .toList())));
   }
 
   private CompletableFuture<UUID> findProcessWorkflowOwner(
@@ -75,6 +89,56 @@ public final class ProcessInformationController extends ProcessController {
     }
     return teamTargetDatabaseTable().findTargetSecured(userId)
       .thenApply(teamTarget -> teamTarget.orElse(targetId));
+  }
+
+  @RequestMapping(path = "/process/workflow/inputs/", method = RequestMethod.POST)
+  private CompletableFuture<Map<String, Object>> findProcessWorkflowInputs(
+    HttpServletRequest request, @RequestBody String payload,
+    HttpServletResponse response
+  ) {
+    var body = DulnoRequestBody.of(payload, response);
+    var workflowId = body.getUUID("workflow");
+    return findUser(request)
+      .thenCompose(user -> triggerDatabaseTable.triggerExistsByWorkflow(workflowId)
+        .thenCompose(exists -> findProcessWorkflowInputs(user, workflowId, exists)));
+  }
+
+  private CompletableFuture<Map<String, Object>> findProcessWorkflowInputs(
+    User user, UUID workflowId, boolean exists
+  ) {
+    if (!exists) {
+      return CompletableFuture.completedFuture(Maps.newHashMap());
+    }
+    return triggerDatabaseTable.findTriggerByWorkflow(workflowId)
+      .thenCompose(trigger -> checkTriggerAuthorization(user, trigger)
+        .thenCompose(authorized -> findProcessWorkflowInputs(trigger, authorized)));
+  }
+
+  private CompletableFuture<Map<String, Object>> findProcessWorkflowInputs(
+    TriggerEntry trigger, boolean authorized
+  ) {
+    if (!authorized) {
+      return CompletableFuture.completedFuture(Maps.newHashMap());
+    }
+    return subWorkflowTrigger.findContent(trigger.id())
+      .thenApply(inputs -> collectWorkflowInputs((String) inputs.get("inputs")));
+  }
+
+  private Map<String, Object> collectWorkflowInputs(String rawInputs) {
+    try {
+      var inputs = new JSONArray(rawInputs).toList().stream()
+        .map(entry -> (String) entry).toList();
+      var result = Lists.<String>newArrayList();
+      for (var input : inputs) {
+        if (input.isEmpty() || input.isBlank()) {
+          continue;
+        }
+        result.add(input);
+      }
+      return Map.of("inputs", result);
+    } catch (Exception exception) {
+      return Maps.newHashMap();
+    }
   }
 
   @RequestMapping(path = "/process/find/", method = RequestMethod.POST)

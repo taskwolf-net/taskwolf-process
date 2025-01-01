@@ -4,6 +4,7 @@ import com.dulno.process.structure.Process;
 import com.dulno.process.structure.ProcessDatabaseTable;
 import com.dulno.process.structure.connection.ProcessConnectionDatabaseTable;
 import com.dulno.process.structure.step.ProcessStepDatabaseTable;
+import com.dulno.workflow.trigger.TriggerEntry;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.experimental.Accessors;
@@ -101,6 +102,28 @@ public class ProcessController extends DulnoRestController {
     return teamTargetDatabaseTable.findTargetSecured(user.id())
       .thenApply(teamTarget -> teamTarget.map(uuid ->
         uuid.equals(processOwnerId)).orElse(false));
+  }
+
+  protected CompletableFuture<Boolean> checkTriggerAuthorization(
+    User user, TriggerEntry trigger
+  ) {
+    if (!trigger.type().equals("sub-workflow-trigger")) {
+      return CompletableFuture.completedFuture(false);
+    }
+    return checkWorkflowAuthorization(user, trigger.ownerId());
+  }
+
+  protected CompletableFuture<Boolean> checkWorkflowAuthorization(
+    User user, UUID workflowOwnerId
+  ) {
+    if (workflowOwnerId.equals(user.id()) ||
+      user.organizations().contains(workflowOwnerId)
+    ) {
+      return CompletableFuture.completedFuture(true);
+    }
+    return teamTargetDatabaseTable().findTargetSecured(user.id())
+      .thenApply(teamTarget -> teamTarget.map(uuid ->
+        uuid.equals(workflowOwnerId)).orElse(false));
   }
 
   protected CompletableFuture<UUID> findProcessTarget(UUID userId) {

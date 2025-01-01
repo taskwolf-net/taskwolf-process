@@ -1,5 +1,3 @@
 {
-  "process.link.description": "Gute Nachrichten! Sie brauchen kein Konto zu verknüpfen, um dieses Modul zu nutzen. Klicken Sie einfach auf \"Überspringen\", um zur nächsten Seite zu gelangen.",
-  "process.trigger.name": "Prozess",
-  "process.trigger.description": "Dieser Trigger wird ausgelöst, wenn ein Prozessschritt den Workflow aufruft"
+
 }

@@ -1,5 +1,3 @@
 {
-  "process.link.description": "Great news! You don't need to link an account to use this module. Just click on \"skip\" to go to the next page.",
-  "process.trigger.name": "Process",
-  "process.trigger.description": "This trigger is initiated when a process step calls the workflow"
+
 }

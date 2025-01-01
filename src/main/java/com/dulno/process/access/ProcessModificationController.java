@@ -1,6 +1,13 @@
 package com.dulno.process.access;
 
 import com.dulno.process.structure.step.ProcessStepDatabaseTable;
+import com.dulno.workflow.action.ActionDatabaseTable;
+import com.dulno.workflow.action.ActionEntry;
+import com.dulno.workflow.structure.Workflow;
+import com.dulno.workflow.sub.action.close.SubWorkflowCloseAction;
+import com.dulno.workflow.sub.trigger.SubWorkflowTrigger;
+import com.dulno.workflow.trigger.TriggerDatabaseTable;
+import com.dulno.workflow.trigger.TriggerEntry;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,11 +22,11 @@ import com.dulno.core.organization.team.TeamTargetDatabaseTable;
 import com.dulno.core.user.User;
 import com.dulno.core.user.UserDatabaseTable;
 import com.dulno.core.user.UserTargetDatabaseTable;
-import com.dulno.workflow.structure.WorkflowDatabaseTable;
-import com.dulno.workflow.structure.WorkflowEntry;
 import com.dulno.process.structure.Process;
 import com.dulno.process.structure.ProcessDatabaseTable;
 import com.dulno.process.structure.connection.ProcessConnectionDatabaseTable;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -27,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.security.Key;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
@@ -36,7 +44,10 @@ import java.util.stream.Stream;
 public final class ProcessModificationController extends ProcessController {
   private final BundleDatabaseTable bundleDatabaseTable;
   private final TeamDatabaseTable teamDatabaseTable;
-  private final WorkflowDatabaseTable workflowDatabaseTable;
+  private final TriggerDatabaseTable triggerDatabaseTable;
+  private final ActionDatabaseTable actionDatabaseTable;
+  private final SubWorkflowTrigger subWorkflowTrigger;
+  private final SubWorkflowCloseAction subWorkflowCloseAction;
   private final WorkflowModule workflowModule;
 
   private ProcessModificationController(
@@ -47,14 +58,20 @@ public final class ProcessModificationController extends ProcessController {
     UserTargetDatabaseTable userTargetDatabaseTable,
     TeamTargetDatabaseTable teamTargetDatabaseTable,
     BundleDatabaseTable bundleDatabaseTable, TeamDatabaseTable teamDatabaseTable,
-    WorkflowDatabaseTable workflowDatabaseTable, WorkflowModule workflowModule
+    TriggerDatabaseTable triggerDatabaseTable,
+    ActionDatabaseTable actionDatabaseTable,
+    SubWorkflowTrigger subWorkflowTrigger,
+    SubWorkflowCloseAction subWorkflowCloseAction, WorkflowModule workflowModule
   ) {
     super(secretKey, userDatabaseTable, processDatabaseTable,
       processStepDatabaseTable, processConnectionDatabaseTable,
       userTargetDatabaseTable, teamTargetDatabaseTable);
     this.bundleDatabaseTable = bundleDatabaseTable;
     this.teamDatabaseTable = teamDatabaseTable;
-    this.workflowDatabaseTable = workflowDatabaseTable;
+    this.triggerDatabaseTable = triggerDatabaseTable;
+    this.actionDatabaseTable = actionDatabaseTable;
+    this.subWorkflowTrigger = subWorkflowTrigger;
+    this.subWorkflowCloseAction = subWorkflowCloseAction;
     this.workflowModule = workflowModule;
   }
 
@@ -203,8 +220,19 @@ public final class ProcessModificationController extends ProcessController {
     if (!step.has("workflow")) {
       return CompletableFuture.completedFuture(true);
     }
-    return workflowDatabaseTable.findWorkflow(step.getUUID("workflow"))
-      .thenCompose(workflow -> checkWorkflowAuthorization(user, workflow.ownerId()));
+    var workflowId = step.getUUID("workflow");
+    return triggerDatabaseTable.triggerExistsByWorkflow(workflowId)
+      .thenCompose(exists -> checkStepWorkflow(user, workflowId, exists));
+  }
+
+  private CompletableFuture<Boolean> checkStepWorkflow(
+    User user, UUID workflowId, boolean exists
+  ) {
+    if (!exists) {
+      return CompletableFuture.completedFuture(true);
+    }
+    return triggerDatabaseTable.findTriggerByWorkflow(workflowId)
+      .thenCompose(trigger -> checkTriggerAuthorization(user, trigger));
   }
 
   private CompletableFuture<Void> updateProcess(
@@ -312,53 +340,102 @@ public final class ProcessModificationController extends ProcessController {
   }
 
   @RequestMapping(path = "/process/workflow/execute/", method = RequestMethod.POST)
-  private void executeProcessStepWorkflow(
+  private CompletableFuture<Map<String, Object>> executeProcessStepWorkflow(
     HttpServletRequest request, @RequestBody String payload,
     HttpServletResponse response
   ) {
     var body = DulnoRequestBody.of(payload, response);
     var workflowId = body.getUUID("workflow");
-    findUser(request).thenAccept(user ->
-      workflowDatabaseTable.workflowExists(workflowId).thenAccept(exists ->
-        executeProcessStepWorkflow(user, workflowId, exists)));
+    return findUser(request)
+      .thenCompose(user -> triggerDatabaseTable.triggerExistsByWorkflow(workflowId)
+        .thenCompose(exists -> executeProcessStepWorkflow(user, workflowId,
+          body.getObject("inputs").raw(), exists)));
   }
 
-  private void executeProcessStepWorkflow(
-    User user, UUID workflowId, boolean exists
+  private CompletableFuture<Map<String, Object>> executeProcessStepWorkflow(
+    User user, UUID workflowId, JSONObject inputs, boolean exists
   ) {
     if (!exists) {
-      return;
+      return CompletableFuture.completedFuture(Maps.newHashMap());
     }
-    workflowDatabaseTable.findWorkflow(workflowId).thenAccept(workflow ->
-      checkWorkflowAuthorization(user, workflow.ownerId()).thenAccept(authorized ->
-        executeProcessStepWorkflow(workflow, authorized)));
+    return triggerDatabaseTable.findTriggerByWorkflow(workflowId)
+      .thenCompose(trigger -> checkTriggerAuthorization(user, trigger)
+        .thenCompose(authorized -> executeProcessStepWorkflow(inputs, trigger,
+          authorized)));
   }
 
-  private void executeProcessStepWorkflow(
-    WorkflowEntry workflowEntry, boolean authorized
+  private CompletableFuture<Map<String, Object>> executeProcessStepWorkflow(
+    JSONObject inputs, TriggerEntry trigger, boolean authorized
   ) {
     if (!authorized) {
-      return;
+      return CompletableFuture.completedFuture(Maps.newHashMap());
     }
-    executeProcessStepWorkflow(workflowEntry);
+    return subWorkflowTrigger.findContent(trigger.id()).thenCompose(totalInputs ->
+      executeProcessStepWorkflow(inputs, trigger, (String) totalInputs.get("inputs")));
   }
 
-  private void executeProcessStepWorkflow(WorkflowEntry workflowEntry) {
-    workflowModule.createWorkflow(workflowEntry).thenAccept(workflow ->
-      workflow.trigger(Maps.newHashMap()));
-  }
-
-  private CompletableFuture<Boolean> checkWorkflowAuthorization(
-    User user, UUID workflowOwnerId
+  private CompletableFuture<Map<String, Object>> executeProcessStepWorkflow(
+    JSONObject inputs, TriggerEntry trigger, String rawTotalInputs
   ) {
-    if (workflowOwnerId.equals(user.id()) ||
-      user.organizations().contains(workflowOwnerId)
-    ) {
-      return CompletableFuture.completedFuture(true);
+    var totalInputs = new JSONArray(rawTotalInputs).toList().stream()
+      .map(entry -> (String) entry).toList();
+    var triggerInformation = Maps.<String, Object>newHashMap();
+    for (var input : totalInputs) {
+      var value = inputs.has(input) ? inputs.get(input) : "";
+      triggerInformation.put("sub_workflow_" + input, value);
     }
-    return teamTargetDatabaseTable().findTargetSecured(user.id())
-      .thenApply(teamTarget -> teamTarget.map(uuid ->
-        uuid.equals(workflowOwnerId)).orElse(false));
+    return workflowModule.createWorkflowById(trigger.workflowId())
+      .thenCompose(workflow -> workflow.trigger(triggerInformation)
+        .thenCompose(result -> findSubWorkflowOutputs(trigger.workflowId())
+          .thenApply(outputs -> collectProcessStepWorkflowOutput(workflow,
+            outputs))));
+  }
+
+  private Map<String, Object> collectProcessStepWorkflowOutput(
+    Workflow workflow, List<String> outputs
+  ) {
+    var information = Maps.<String, Object>newHashMap();
+    var workflowInformation = workflow.currentInformation();
+    for (var entry : workflowInformation.entrySet()) {
+      var key = entry.getKey();
+      if (key.contains("sub_workflow")) {
+        var output = key.replaceAll(".*-sub_workflow_(\\w+)", "$1");
+        if (!outputs.contains(output)) {
+          continue;
+        }
+        information.put(output, entry.getValue());
+      }
+    }
+    return information;
+  }
+
+  private CompletableFuture<List<String>> findSubWorkflowOutputs(UUID workflowId) {
+    return actionDatabaseTable.findActionsByWorkflowAndType(workflowId,
+      "sub-workflow-close-action").thenCompose(this::findSubWorkflowAction);
+  }
+
+  private CompletableFuture<List<String>> findSubWorkflowAction(
+    List<ActionEntry> actions
+  ) {
+    if (actions.isEmpty()) {
+      return CompletableFuture.completedFuture(Lists.newArrayList());
+    }
+    return subWorkflowCloseAction.findContent(actions.get(0).id())
+      .thenApply(this::assemblySubWorkflowOutputs);
+  }
+
+  private List<String> assemblySubWorkflowOutputs(
+    Map<String, Object> actionContent
+  ) {
+    var variables = Lists.<String>newArrayList();
+    var outputs = new JSONObject((String) actionContent.get("outputs"));
+    for (var key : outputs.keySet()) {
+      if (key.isEmpty() || key.isBlank()) {
+        continue;
+      }
+      variables.add(key);
+    }
+    return variables;
   }
 
   @RequestMapping(path = "/process/remove/", method = RequestMethod.POST)
