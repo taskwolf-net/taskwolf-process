@@ -121,10 +121,14 @@ public final class ProcessInformationController extends ProcessController {
       return CompletableFuture.completedFuture(Maps.newHashMap());
     }
     return subWorkflowTrigger.findContent(trigger.id())
-      .thenApply(inputs -> collectWorkflowInputs((String) inputs.get("inputs")));
+      .thenCompose(inputs -> workflowDatabaseTable.findWorkflow(trigger.workflowId())
+        .thenApply(workflow -> collectWorkflowInputs(workflow,
+          (String) inputs.get("inputs"))));
   }
 
-  private Map<String, Object> collectWorkflowInputs(String rawInputs) {
+  private Map<String, Object> collectWorkflowInputs(
+    WorkflowEntry workflow, String rawInputs
+  ) {
     try {
       var inputs = new JSONArray(rawInputs).toList().stream()
         .map(entry -> (String) entry).toList();
@@ -135,7 +139,7 @@ public final class ProcessInformationController extends ProcessController {
         }
         result.add(input);
       }
-      return Map.of("inputs", result);
+      return Map.of("workflow", workflow.name(), "inputs", result);
     } catch (Exception exception) {
       return Maps.newHashMap();
     }

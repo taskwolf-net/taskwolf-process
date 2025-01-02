@@ -386,15 +386,25 @@ public final class ProcessModificationController extends ProcessController {
     }
     return workflowModule.createWorkflowById(trigger.workflowId())
       .thenCompose(workflow -> workflow.trigger(triggerInformation)
-        .thenCompose(result -> findSubWorkflowOutputs(trigger.workflowId())
-          .thenApply(outputs -> collectProcessStepWorkflowOutput(workflow,
-            outputs))));
+        .thenCompose(result -> checkProcessStepWorkflowResult(trigger, workflow,
+          result)));
+  }
+
+  private CompletableFuture<Map<String, Object>> checkProcessStepWorkflowResult(
+    TriggerEntry trigger, Workflow workflow, boolean result
+  ) {
+    if (!result) {
+      return CompletableFuture.completedFuture(Map.of("success", false));
+    }
+    return findSubWorkflowOutputs(trigger.workflowId())
+      .thenApply(outputs -> collectProcessStepWorkflowOutput(workflow, outputs));
   }
 
   private Map<String, Object> collectProcessStepWorkflowOutput(
     Workflow workflow, List<String> outputs
   ) {
     var information = Maps.<String, Object>newHashMap();
+    information.put("success", true);
     var workflowInformation = workflow.currentInformation();
     for (var entry : workflowInformation.entrySet()) {
       var key = entry.getKey();
