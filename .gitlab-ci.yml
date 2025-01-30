@@ -1,9 +1,43 @@
-image: gradle:8.12-jdk21
+stages:
+  - build
+  - publish
+  - deploy
 
-before_script:
-  - export TASKWOLF_GITLAB_PRIVATE_TOKEN="$TASKWOLF_GITLAB_PRIVATE_TOKEN"
+variables:
+  DOCKER_IMAGE: "dulno-core-process"
 
 build:
   stage: build
+  image: gradle:8.12.0-jdk21
   script:
-    - gradle assemble
+    - gradle jar
+  artifacts:
+    paths:
+      - build/libs/
+    expire_in: 1 day
+
+publish:
+  stage: publish
+  image: docker:cli
+  services:
+    - docker:dind
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_DRIVER: overlay2
+  dependencies:
+    - build
+  script:
+    - echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin $DOCKER_REGISTRY
+    - docker build -t $DOCKER_REGISTRY/$DOCKER_IMAGE:latest .
+    - docker push $DOCKER_REGISTRY/$DOCKER_IMAGE:latest
+  only:
+    - master
+
+deploy:
+  stage: deploy
+  trigger:
+    project: $CORE_PIPELINE_PROJECT
+    branch: $CORE_PIPELINE_BRANCH
+  only:
+    - master
