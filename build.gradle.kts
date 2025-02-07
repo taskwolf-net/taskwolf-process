@@ -75,7 +75,7 @@ dependencies {
   compileOnly("org.json:json:20240303")
   compileOnly("commons-io:commons-io:2.18.0")
 
-  compileOnly("org.springframework.boot:spring-boot-starter-web:3.4.1")
+  compileOnly("org.springframework.boot:spring-boot-starter-web:3.4.2")
 }
 
 tasks.test {
