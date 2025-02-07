@@ -12,9 +12,11 @@ build:
   image: gradle:8.12.0-jdk21
   script:
     - gradle jar
+    - gradle javadoc
   artifacts:
     paths:
       - build/libs/
+      - build/docs/javadoc/
     expire_in: 1 day
 
 publish:
