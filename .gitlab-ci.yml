@@ -9,7 +9,7 @@ variables:
 
 build:
   stage: build
-  image: gradle:8.12.0-jdk21
+  image: gradle:8.12.1-jdk21
   script:
     - gradle jar
     - gradle javadoc
