@@ -12,6 +12,7 @@ build:
   image: gradle:8.12.1-jdk21
   script:
     - gradle jar
+    - gradle publish
     - gradle javadoc
   artifacts:
     paths:
