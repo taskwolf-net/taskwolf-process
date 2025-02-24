@@ -82,8 +82,8 @@ public final class ProcessModificationController extends ProcessController {
   ) {
     var body = DulnoRequestBody.of(payload, response);
     var created = System.currentTimeMillis();
-    var name = body.getString("name", 64);
-    var description = body.getString("description", 128);
+    var name = body.getSanitizedString("name", 64);
+    var description = body.getSanitizedString("description", 128);
     var steps = body.getObjectList("steps");
     var connections = body.getObjectList("connections");
     return findUser(request).thenCompose(user ->
@@ -141,8 +141,8 @@ public final class ProcessModificationController extends ProcessController {
   ) {
     var body = DulnoRequestBody.of(payload, response);
     var processId = body.getUUID("process");
-    var name = body.getString("name", 64);
-    var description = body.getString("description", 128);
+    var name = body.getSanitizedString("name", 64);
+    var description = body.getSanitizedString("description", 128);
     var steps = body.getObjectList("steps");
     var connections = body.getObjectList("connections");
     return findUser(request).thenCompose(user ->
@@ -322,10 +322,10 @@ public final class ProcessModificationController extends ProcessController {
     UUID stepId, UUID processId, DulnoRequestBody stepData
   ) {
     var todos = stepData.getObjectList("todos").stream()
-      .map(workflow -> workflow.getString("todo")).toList();
+      .map(workflow -> workflow.getSanitizedString("todo")).toList();
     var workflow = stepData.has("workflow") ? stepData.getUUID("workflow") : null;
     processStepDatabaseTable().insertProcessStep(stepId, processId,
-      stepData.getString("name"), stepData.getString("description"),
+      stepData.getSanitizedString("name"), stepData.getSanitizedString("description"),
       todos, workflow, stepData.getString("type"),
       stepData.getInt("xCoordinate"), stepData.getInt("yCoordinate"));
   }
