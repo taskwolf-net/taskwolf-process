@@ -76,6 +76,8 @@ dependencies {
   compileOnly("commons-io:commons-io:2.18.0")
 
   compileOnly("org.springframework.boot:spring-boot-starter-web:3.4.3")
+
+  compileOnly("com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20240325.1")
 }
 
 tasks.test {
