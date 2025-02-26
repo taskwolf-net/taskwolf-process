@@ -405,6 +405,7 @@ public final class ProcessModificationController extends ProcessController {
   ) {
     var information = Maps.<String, Object>newHashMap();
     information.put("success", true);
+    var results = Lists.<Map<String, Object>>newArrayList();
     var workflowInformation = workflow.currentInformation();
     for (var entry : workflowInformation.entrySet()) {
       var key = entry.getKey();
@@ -413,9 +414,10 @@ public final class ProcessModificationController extends ProcessController {
         if (!outputs.contains(output)) {
           continue;
         }
-        information.put(output, entry.getValue());
+        results.add(Map.of("key", output, "value", entry.getValue()));
       }
     }
+    information.put("results", results);
     return information;
   }
 
