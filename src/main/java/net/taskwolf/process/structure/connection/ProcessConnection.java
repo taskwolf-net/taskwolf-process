@@ -1,9 +1,9 @@
-package com.dulno.process.structure.connection;
+package net.taskwolf.process.structure.connection;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.Accessors;
-import com.dulno.core.database.DatabaseRow;
+import net.taskwolf.core.database.DatabaseRow;
 
 import java.util.UUID;
 

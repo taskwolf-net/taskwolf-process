@@ -1,11 +1,11 @@
-package com.dulno.process;
+package net.taskwolf.process;
 
-import com.dulno.process.structure.ProcessDatabaseTable;
-import com.dulno.process.structure.connection.ProcessConnectionDatabaseTable;
-import com.dulno.process.structure.step.ProcessStepDatabaseTable;
-import com.dulno.workflow.WorkflowModule;
-import com.dulno.workflow.sub.action.close.SubWorkflowCloseAction;
-import com.dulno.workflow.sub.trigger.SubWorkflowTrigger;
+import net.taskwolf.process.structure.ProcessDatabaseTable;
+import net.taskwolf.process.structure.connection.ProcessConnectionDatabaseTable;
+import net.taskwolf.process.structure.step.ProcessStepDatabaseTable;
+import net.taskwolf.workflow.WorkflowModule;
+import net.taskwolf.workflow.sub.action.close.SubWorkflowCloseAction;
+import net.taskwolf.workflow.sub.trigger.SubWorkflowTrigger;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import lombok.AccessLevel;

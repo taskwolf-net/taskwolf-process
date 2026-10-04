@@ -1,4 +1,4 @@
-package com.dulno.process.structure.step;
+package net.taskwolf.process.structure.step;
 
 public enum ProcessStepType {
   START,

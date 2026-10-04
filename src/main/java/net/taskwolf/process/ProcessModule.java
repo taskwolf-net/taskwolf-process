@@ -1,12 +1,12 @@
-package com.dulno.process;
+package net.taskwolf.process;
 
 import com.google.common.collect.Lists;
 import com.google.inject.Injector;
-import com.dulno.core.log.Log;
-import com.dulno.core.module.Module;
-import com.dulno.core.module.ModuleDescription;
-import com.dulno.core.module.ModuleInformation;
-import com.dulno.core.module.ModuleLoadPriority;
+import net.taskwolf.core.log.Log;
+import net.taskwolf.core.module.Module;
+import net.taskwolf.core.module.ModuleDescription;
+import net.taskwolf.core.module.ModuleInformation;
+import net.taskwolf.core.module.ModuleLoadPriority;
 import org.springframework.boot.SpringApplication;
 
 @ModuleDescription(name = "process", version = "1.0.0-SNAPSHOT",

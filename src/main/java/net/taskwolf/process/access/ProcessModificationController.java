@@ -1,30 +1,30 @@
-package com.dulno.process.access;
+package net.taskwolf.process.access;
 
-import com.dulno.process.structure.step.ProcessStepDatabaseTable;
-import com.dulno.workflow.action.ActionDatabaseTable;
-import com.dulno.workflow.action.ActionEntry;
-import com.dulno.workflow.structure.Workflow;
-import com.dulno.workflow.sub.action.close.SubWorkflowCloseAction;
-import com.dulno.workflow.sub.trigger.SubWorkflowTrigger;
-import com.dulno.workflow.trigger.TriggerDatabaseTable;
-import com.dulno.workflow.trigger.TriggerEntry;
+import net.taskwolf.process.structure.step.ProcessStepDatabaseTable;
+import net.taskwolf.workflow.action.ActionDatabaseTable;
+import net.taskwolf.workflow.action.ActionEntry;
+import net.taskwolf.workflow.structure.Workflow;
+import net.taskwolf.workflow.sub.action.close.SubWorkflowCloseAction;
+import net.taskwolf.workflow.sub.trigger.SubWorkflowTrigger;
+import net.taskwolf.workflow.trigger.TriggerDatabaseTable;
+import net.taskwolf.workflow.trigger.TriggerEntry;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import com.dulno.workflow.WorkflowModule;
-import com.dulno.core.access.DulnoRequestBody;
-import com.dulno.core.bundle.BundleDatabaseTable;
-import com.dulno.core.iterator.AsyncIterator;
-import com.dulno.core.organization.team.Team;
-import com.dulno.core.organization.team.TeamDatabaseTable;
-import com.dulno.core.organization.team.TeamTargetDatabaseTable;
-import com.dulno.core.user.User;
-import com.dulno.core.user.UserDatabaseTable;
-import com.dulno.core.user.UserTargetDatabaseTable;
-import com.dulno.process.structure.Process;
-import com.dulno.process.structure.ProcessDatabaseTable;
-import com.dulno.process.structure.connection.ProcessConnectionDatabaseTable;
+import net.taskwolf.workflow.WorkflowModule;
+import net.taskwolf.core.access.TaskwolfRequestBody;
+import net.taskwolf.core.bundle.BundleDatabaseTable;
+import net.taskwolf.core.iterator.AsyncIterator;
+import net.taskwolf.core.organization.team.Team;
+import net.taskwolf.core.organization.team.TeamDatabaseTable;
+import net.taskwolf.core.organization.team.TeamTargetDatabaseTable;
+import net.taskwolf.core.user.User;
+import net.taskwolf.core.user.UserDatabaseTable;
+import net.taskwolf.core.user.UserTargetDatabaseTable;
+import net.taskwolf.process.structure.Process;
+import net.taskwolf.process.structure.ProcessDatabaseTable;
+import net.taskwolf.process.structure.connection.ProcessConnectionDatabaseTable;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -80,7 +80,7 @@ public final class ProcessModificationController extends ProcessController {
     HttpServletRequest request, @RequestBody String payload,
     HttpServletResponse response
   ) {
-    var body = DulnoRequestBody.of(payload, response);
+    var body = TaskwolfRequestBody.of(payload, response);
     var created = System.currentTimeMillis();
     var name = body.getSanitizedString("name", 64);
     var description = body.getSanitizedString("description", 128);
@@ -122,8 +122,8 @@ public final class ProcessModificationController extends ProcessController {
   }
 
   private CompletableFuture<Void> addProcess(
-    User creator, UUID ownerId, List<DulnoRequestBody> stepData,
-    List<DulnoRequestBody> connectionData, long created, String name,
+    User creator, UUID ownerId, List<TaskwolfRequestBody> stepData,
+    List<TaskwolfRequestBody> connectionData, long created, String name,
     String description, boolean limitReached, HttpServletResponse response
   ) {
     if (limitReached) {
@@ -139,7 +139,7 @@ public final class ProcessModificationController extends ProcessController {
     HttpServletRequest request, @RequestBody String payload,
     HttpServletResponse response
   ) {
-    var body = DulnoRequestBody.of(payload, response);
+    var body = TaskwolfRequestBody.of(payload, response);
     var processId = body.getUUID("process");
     var name = body.getSanitizedString("name", 64);
     var description = body.getSanitizedString("description", 128);
@@ -154,8 +154,8 @@ public final class ProcessModificationController extends ProcessController {
   }
 
   private CompletableFuture<Boolean> checkProcessIntegrity(
-    User user, String name, List<DulnoRequestBody> stepData,
-    List<DulnoRequestBody> connectionData
+    User user, String name, List<TaskwolfRequestBody> stepData,
+    List<TaskwolfRequestBody> connectionData
   ) {
     if (name.isEmpty()) {
       return CompletableFuture.completedFuture(false);
@@ -168,11 +168,11 @@ public final class ProcessModificationController extends ProcessController {
   }
 
   private boolean checkProcessCompleteness(
-    List<DulnoRequestBody> stepData, List<DulnoRequestBody> connectionData
+    List<TaskwolfRequestBody> stepData, List<TaskwolfRequestBody> connectionData
   ) {
     var steps = findStartSteps(stepData);
     while (!steps.isEmpty()) {
-      var newSteps = Lists.<DulnoRequestBody>newArrayList();
+      var newSteps = Lists.<TaskwolfRequestBody>newArrayList();
       for (var step : steps) {
         var connections = findStepConnections(step, stepData, connectionData);
         for (var connection : connections) {
@@ -188,10 +188,10 @@ public final class ProcessModificationController extends ProcessController {
     return false;
   }
 
-  private List<DulnoRequestBody> findStartSteps(
-    List<DulnoRequestBody> stepData
+  private List<TaskwolfRequestBody> findStartSteps(
+    List<TaskwolfRequestBody> stepData
   ) {
-    var startSteps = Lists.<DulnoRequestBody>newArrayList();
+    var startSteps = Lists.<TaskwolfRequestBody>newArrayList();
     for (var step : stepData) {
       if (step.getString("type").equalsIgnoreCase("START")) {
         startSteps.add(step);
@@ -200,12 +200,12 @@ public final class ProcessModificationController extends ProcessController {
     return startSteps;
   }
 
-  private List<DulnoRequestBody> findStepConnections(
-    DulnoRequestBody step, List<DulnoRequestBody> stepData,
-    List<DulnoRequestBody> connectionData
+  private List<TaskwolfRequestBody> findStepConnections(
+    TaskwolfRequestBody step, List<TaskwolfRequestBody> stepData,
+    List<TaskwolfRequestBody> connectionData
   ) {
     var stepIndex = stepData.indexOf(step);
-    var connections = Lists.<DulnoRequestBody>newArrayList();
+    var connections = Lists.<TaskwolfRequestBody>newArrayList();
     for (var connection : connectionData) {
       if (connection.getInt("originStep") == stepIndex) {
         connections.add(connection);
@@ -215,7 +215,7 @@ public final class ProcessModificationController extends ProcessController {
   }
 
   private CompletableFuture<Boolean> checkStepWorkflow(
-    User user, DulnoRequestBody step
+    User user, TaskwolfRequestBody step
   ) {
     if (!step.has("workflow")) {
       return CompletableFuture.completedFuture(true);
@@ -236,8 +236,8 @@ public final class ProcessModificationController extends ProcessController {
   }
 
   private CompletableFuture<Void> updateProcess(
-    Process process, boolean authorized, List<DulnoRequestBody> stepData,
-    List<DulnoRequestBody> connectionData, String name, String description
+    Process process, boolean authorized, List<TaskwolfRequestBody> stepData,
+    List<TaskwolfRequestBody> connectionData, String name, String description
   ) {
     if (!authorized) {
       return CompletableFuture.completedFuture(null);
@@ -250,8 +250,8 @@ public final class ProcessModificationController extends ProcessController {
   }
 
   private CompletableFuture<Void> createProcess(
-    User creator, UUID ownerId, List<DulnoRequestBody> stepData,
-    List<DulnoRequestBody> connectionData, long created, String name,
+    User creator, UUID ownerId, List<TaskwolfRequestBody> stepData,
+    List<TaskwolfRequestBody> connectionData, long created, String name,
     String description
   ) {
     return processDatabaseTable().generateAvailableProcessId()
@@ -261,7 +261,7 @@ public final class ProcessModificationController extends ProcessController {
 
   private CompletableFuture<Void> createProcess(
     UUID processId, User creator, UUID ownerId,
-    List<DulnoRequestBody> stepData, List<DulnoRequestBody> connectionData,
+    List<TaskwolfRequestBody> stepData, List<TaskwolfRequestBody> connectionData,
     long created, String name, String description
   ) {
     return generateStepIds(stepData.size()).thenCompose(stepIds ->
@@ -303,8 +303,8 @@ public final class ProcessModificationController extends ProcessController {
 
   private CompletableFuture<Void> createProcess(
     UUID processId, UUID creatorId, UUID ownerId, List<UUID> stepIds,
-    List<DulnoRequestBody> stepData, List<UUID> connectionIds,
-    List<DulnoRequestBody> connectionData, long created, String name,
+    List<TaskwolfRequestBody> stepData, List<UUID> connectionIds,
+    List<TaskwolfRequestBody> connectionData, long created, String name,
     String description
   ) {
     for (int i = 0; i < stepData.size(); i++) {
@@ -319,7 +319,7 @@ public final class ProcessModificationController extends ProcessController {
   }
 
   private void createStep(
-    UUID stepId, UUID processId, DulnoRequestBody stepData
+    UUID stepId, UUID processId, TaskwolfRequestBody stepData
   ) {
     var todos = stepData.getObjectList("todos").stream()
       .map(workflow -> workflow.getSanitizedString("todo")).toList();
@@ -331,7 +331,7 @@ public final class ProcessModificationController extends ProcessController {
   }
 
   private void createConnection(
-    UUID connectionId, UUID processId, DulnoRequestBody connectionData,
+    UUID connectionId, UUID processId, TaskwolfRequestBody connectionData,
     List<UUID> stepIds
   ) {
     processConnectionDatabaseTable().insertProcessConnection(connectionId,
@@ -344,7 +344,7 @@ public final class ProcessModificationController extends ProcessController {
     HttpServletRequest request, @RequestBody String payload,
     HttpServletResponse response
   ) {
-    var body = DulnoRequestBody.of(payload, response);
+    var body = TaskwolfRequestBody.of(payload, response);
     var workflowId = body.getUUID("workflow");
     return findUser(request)
       .thenCompose(user -> triggerDatabaseTable.triggerExistsByWorkflow(workflowId)
@@ -455,7 +455,7 @@ public final class ProcessModificationController extends ProcessController {
     HttpServletRequest request, @RequestBody String payload,
     HttpServletResponse response
   ) {
-    var body = DulnoRequestBody.of(payload, response);
+    var body = TaskwolfRequestBody.of(payload, response);
     var futureResponse = new CompletableFuture<Void>();
     performProcessOperation(findUserId(request), body.getUUID("process"),
       process -> deleteProcess(process).thenAccept(futureResponse::complete),

@@ -1,8 +1,8 @@
-package com.dulno.process.structure.step;
+package net.taskwolf.process.structure.step;
 
 import com.google.common.collect.Lists;
-import com.dulno.core.database.*;
-import com.dulno.core.database.condition.DatabaseCondition;
+import net.taskwolf.core.database.*;
+import net.taskwolf.core.database.condition.DatabaseCondition;
 
 import java.util.List;
 import java.util.UUID;
