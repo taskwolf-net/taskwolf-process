@@ -1,7 +1,7 @@
 plugins {
   id("java")
   id("maven-publish")
-  id("io.freefair.lombok") version "9.8.0"
+  id("io.freefair.lombok") version "9.8.2"
 }
 
 group = "net.taskwolf"
@@ -41,9 +41,9 @@ dependencies {
   compileOnly("org.json:json:20260814")
   compileOnly("commons-io:commons-io:2.22.0")
 
-  compileOnly("org.springframework.boot:spring-boot-starter-web:4.1.1")
+  compileOnly("org.springframework.boot:spring-boot-starter-web:4.1.2")
 
-  compileOnly("com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20260924.2")
+  compileOnly("com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20261011.1")
 }
 
 tasks.test {
